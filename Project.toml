@@ -3,8 +3,12 @@ uuid = "081b2520-a7cf-5256-aaf1-5c8211e3260a"
 authors = ["Stefan de Lange <langestefan@msn.com>"]
 version = "0.1.0"
 
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+
 [workspace]
 projects = ["test", "docs"]
 
 [compat]
+Dates = "1.10"
 julia = "1.10"

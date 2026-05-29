@@ -69,13 +69,18 @@ filter on tags to run a subset.
 
 ## Linting & formatting
 
-Linting/formatting is enforced via [pre-commit](https://pre-commit.com) — **commits
-only succeed if all hooks pass**. Julia code is formatted with both JuliaFormatter
-(config in `.JuliaFormatter.toml`: 4-space indent, 92-char margin) and Runic.
-ExplicitImports checks that imports are explicit. Run all hooks manually:
+Linting/formatting is enforced via [pre-commit](https://pre-commit.com) hooks
+(this repo runs them through `prek`) — **commits only succeed if all hooks pass**.
+Julia code is formatted with both JuliaFormatter (config in `.JuliaFormatter.toml`:
+4-space indent, 92-char margin) and Runic. ExplicitImports checks that imports are
+explicit.
+
+**Always run `prek run -a` after making changes** (before considering work done /
+committing). It reformats and lints in place, so it may modify files — re-check and
+re-run until clean:
 
 ```bash
-pre-commit run -a
+prek run -a
 ```
 
 Link-check locally with `lychee --no-progress --config lychee.toml .`.
