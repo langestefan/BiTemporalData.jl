@@ -10,11 +10,20 @@ independent time axes — *valid time* (when it is true in the world) and
 "the world changed" from "we changed our mind."
 
 The package is scaffolded from [BestieTemplate.jl](https://github.com/JuliaBesties/BestieTemplate.jl).
-`src/BiTemporalData.jl` is currently a `hello_world` stub — the real architecture
-to build out is fully specified in **`DESIGN.md`**, which is the source of truth
-for types, the backend interface, operation semantics, and the planned file
-layout. Read it before implementing anything. (Note: `DESIGN.md` calls the module
-`Bitemporal`; the actual package/module is `BiTemporalData`.)
+The v1 data model is implemented: the abstract interface, the default operations,
+and the `MemoryStore` reference backend. **`DESIGN.md`** is the original spec and
+remains the rationale reference for the semantics and invariants. (Note: `DESIGN.md`
+calls the module `Bitemporal`; the actual package/module is `BiTemporalData`.)
+
+Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
+
+- `types.jl` — `Record`, `BitemporalStore`, the `MAX_DATE`/`MAX_DT` sentinels, and
+  the internal `_close`/`_overlaps`/`_believed` helpers.
+- `interface.jl` — the four backend primitive declarations.
+- `defaults.jl` — `insert!` (extends `Base.insert!`), `correct!`, `amend!`,
+  `as_of`, `history`.
+- `snapshot.jl` — `snapshot`.
+- `memory.jl` — `MemoryStore` and its four primitive methods.
 
 ## Architecture (per DESIGN.md)
 
@@ -44,6 +53,18 @@ All write operations take an optional `ts=` keyword purely for test determinism 
 production callers omit it. Tests must pass explicit `ts=` and never rely on `sleep`
 or wall-clock timing.
 
+Implementation specifics worth knowing before editing:
+
+- `history`/`snapshot` return a `NamedTuple` of equal-length column vectors. That is
+  already a valid Tables.jl column table, so the package has **no `Tables`
+  dependency** (`Tables` is a test-only dep used to verify the round-trip).
+- `insert!` extends `Base.insert!` (to avoid an export collision), so it is *not* in
+  the `export` list and `@autodocs` won't pick it up — `docs/src/reference.md`
+  documents it with an explicit signature-filtered `@docs` block.
+- `snapshot` can't dispatch on keywords, so it selects its two modes via a
+  `valid_at` sentinel (`nothing` → full tx-slice; a `Date` → collapsed
+  cross-section).
+
 ## Commands
 
 Run from the repository root. Tests use the [TestItemRunner](https://github.com/julia-vscode/TestItemRunner)
@@ -54,8 +75,11 @@ discovered by `test/runtests.jl`).
 # Run the full test suite
 julia --project=. -e 'using Pkg; Pkg.test()'
 
-# Build docs locally with live reload (then open the served URL)
-julia --project=docs -e 'using Pkg; Pkg.develop(path=".")'   # first time only
+# Build the docs once (runs the @example blocks; matches CI)
+julia --project=docs -e 'using Pkg; Pkg.instantiate()'   # first time only
+julia --project=docs docs/make.jl
+
+# ...or serve with live reload while editing
 julia --project=docs -e 'using LiveServer; servedocs()'
 ```
 
@@ -90,4 +114,4 @@ Link-check locally with `lychee --no-progress --config lychee.toml .`.
 Bump `version` in `Project.toml`, move the `CHANGELOG.md` "Unreleased" section to a
 dated version section, merge to `main`, then comment `@JuliaRegistrator register` on
 the release commit. TagBot handles the git tag and docs deploy. Full steps in
-`docs/src/91-developer.md`.
+`docs/src/developer.md`.
