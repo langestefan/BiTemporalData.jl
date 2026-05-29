@@ -28,6 +28,11 @@ jobs:
   docs:
     name: Documentation
     runs-on: ubuntu-latest
+    # Allow the GITHUB_TOKEN to push the built docs to the gh-pages branch.
+    permissions:
+      contents: write
+      pull-requests: read
+      statuses: write
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
