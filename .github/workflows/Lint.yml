@@ -26,7 +26,7 @@ jobs:
         with:
           version: "1"
       - name: Use Julia cache
-        uses: julia-actions/cache@v2
+        uses: julia-actions/cache@v3
       - name: Install Julia packages
         # ExplicitImports' pre-commit hook is `language: script`; it loads
         # ExplicitImports from the default environment, so install it here too.
