@@ -1,0 +1,13 @@
+# Changes here will be overwritten by Copier
+AddPrecommitUpdateCI: false
+Authors: Stefan de Lange <langestefan@msn.com>
+JuliaMinVersion: '1.10'
+License: MIT
+LicenseCopyrightHolders: Stefan de Lange
+PackageName: BiTemporalData
+PackageOwner: langestefan
+PackageUUID: 081b2520-a7cf-5256-aaf1-5c8211e3260a
+StrategyConfirmIncluded: false
+StrategyLevel: 3
+StrategyReviewExcluded: false
+_src_path: /home/sdelange/.julia/packages/BestieTemplate/6QVd6

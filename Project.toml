@@ -1,0 +1,10 @@
+name = "BiTemporalData"
+uuid = "081b2520-a7cf-5256-aaf1-5c8211e3260a"
+authors = ["Stefan de Lange <langestefan@msn.com>"]
+version = "0.1.0"
+
+[workspace]
+projects = ["test", "docs"]
+
+[compat]
+julia = "1.10"
