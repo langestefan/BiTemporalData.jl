@@ -6,12 +6,12 @@ CurrentModule = BiTemporalData
 
 BiTemporalData stores facts along two independent time axes:
 
-- **valid time** — when a fact is true in the world (`valid_from`, `valid_to`);
-- **transaction time** — when the system believed it (`tx_from`, `tx_to`).
+- **valid time**: when a fact is true in the world (`valid_from`, `valid_to`);
+- **transaction time**: when the system believed it (`tx_from`, `tx_to`).
 
 Tracking both lets you separate *the world changed* from *we changed our mind*,
 and reproduce exactly what was known at any past point in time. All intervals are
-half-open `[from, to)`, and writes are append-only — the only mutation is closing
+half-open `[from, to)`, and writes are append-only; the only mutation is closing
 a record's `tx_to`.
 
 The examples below run during the docs build and share one store `s`. Timestamps
@@ -34,7 +34,7 @@ as_of(s, "AAPL"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 2))
 ## Correcting a mistake
 
 [`correct!`](@ref) supersedes a value we now believe was wrong. The old record is
-not deleted — it is closed in transaction time and stays readable:
+not deleted; it is closed in transaction time and stays readable:
 
 ```@example bt
 correct!(s, "AAPL", 110.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 3))
@@ -63,7 +63,7 @@ amend!(s, "AAPL", 130.0; effective = Date(2024, 7, 1), ts = DateTime(2024, 8, 1)
 ## History and snapshots
 
 [`history`](@ref) returns every record ever written for a key, superseded ones
-included — the full audit trail:
+included: the full audit trail.
 
 ```@example bt
 history(s, "AAPL")
@@ -78,16 +78,3 @@ snapshot(s; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2))
 ```
 
 See the [Reference](@ref reference) for the full API.
-
-## Contributors
-
-```@raw html
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-```

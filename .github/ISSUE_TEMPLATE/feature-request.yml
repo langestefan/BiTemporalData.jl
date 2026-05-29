@@ -10,7 +10,6 @@ body:
 
         - There is not an [existing issue](https://github.com/langestefan/BiTemporalData.jl/issues) with the same question
         - You have read the [contributing guide](https://langestefan.github.io/BiTemporalData.jl/dev/contributing/)
-        - You are following the [code of conduct](https://github.com/langestefan/BiTemporalData.jl/blob/main/CODE_OF_CONDUCT.md)
         The form below should help you in filling out this issue.
   - type: textarea
     id: description

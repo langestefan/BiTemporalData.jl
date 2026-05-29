@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A Julia package for **bitemporal** fact storage: every fact is tracked along two
-independent time axes — *valid time* (when it is true in the world) and
+independent time axes: *valid time* (when it is true in the world) and
 *transaction time* (when the system believed it). This lets the store distinguish
 "the world changed" from "we changed our mind."
 
@@ -17,20 +17,20 @@ calls the module `Bitemporal`; the actual package/module is `BiTemporalData`.)
 
 Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 
-- `types.jl` — `Record`, `BitemporalStore`, the `MAX_DATE`/`MAX_DT` sentinels, and
+- `types.jl`: `Record`, `BitemporalStore`, the `MAX_DATE`/`MAX_DT` sentinels, and
   the internal `_close`/`_overlaps`/`_believed` helpers.
-- `interface.jl` — the four backend primitive declarations.
-- `defaults.jl` — `insert!` (extends `Base.insert!`), `correct!`, `amend!`,
+- `interface.jl`: the four backend primitive declarations.
+- `defaults.jl`: `insert!` (extends `Base.insert!`), `correct!`, `amend!`,
   `as_of`, `history`.
-- `snapshot.jl` — `snapshot`.
-- `memory.jl` — `MemoryStore` and its four primitive methods.
-- `threadsafe.jl` — `ThreadSafe`, an operation-level locking wrapper.
+- `snapshot.jl`: `snapshot`.
+- `memory.jl`: `MemoryStore` and its four primitive methods.
+- `threadsafe.jl`: `ThreadSafe`, an operation-level locking wrapper.
 
 ## Architecture (per DESIGN.md)
 
 The design separates an **abstract store interface** from concrete backends:
 
-- `BitemporalStore{K,V}` (abstract) — `K` is the entity key type, `V` the value type.
+- `BitemporalStore{K,V}` (abstract): `K` is the entity key type, `V` the value type.
 - A backend implements **four primitives**: `get_records`, `put_record!`,
   `close_tx!`, `entities`.
 - All higher-level operations (`insert!`, `correct!`, `amend!`, `as_of`,
@@ -41,7 +41,7 @@ The design separates an **abstract store interface** from concrete backends:
   semantic test suite.
 - `ThreadSafe(store)` wraps any backend with a store-wide `ReentrantLock`. It
   locks at the **operation** layer (not per-primitive), so multi-primitive writes
-  like `correct!`/`amend!` stay atomic — it delegates each operation to the inner
+  like `correct!`/`amend!` stay atomic; it delegates each operation to the inner
   store, whose primitive calls then run inside that one lock. It also passes the
   full semantic suite, so the suite doubles as its correctness check.
 
@@ -55,7 +55,7 @@ analytics): a single linear pass producing a flat columnar table frozen at a fix
 `tx_at`, which makes reads reproducible and point-in-time leakage-proof. Do not
 query the live store per-record for those workloads; materialize a snapshot.
 
-All write operations take an optional `ts=` keyword purely for test determinism —
+All write operations take an optional `ts=` keyword purely for test determinism;
 production callers omit it. Tests must pass explicit `ts=` and never rely on `sleep`
 or wall-clock timing.
 
@@ -65,7 +65,7 @@ Implementation specifics worth knowing before editing:
   already a valid Tables.jl column table, so the package has **no `Tables`
   dependency** (`Tables` is a test-only dep used to verify the round-trip).
 - `insert!` extends `Base.insert!` (to avoid an export collision), so it is *not* in
-  the `export` list and `@autodocs` won't pick it up — `docs/src/reference.md`
+  the `export` list and `@autodocs` won't pick it up; `docs/src/reference.md`
   documents it with an explicit signature-filtered `@docs` block.
 - `snapshot` can't dispatch on keywords, so it selects its two modes via a
   `valid_at` sentinel (`nothing` → full tx-slice; a `Date` → collapsed
@@ -100,13 +100,13 @@ filter on tags to run a subset.
 ## Linting & formatting
 
 Linting/formatting is enforced via [pre-commit](https://pre-commit.com) hooks
-(this repo runs them through `prek`) — **commits only succeed if all hooks pass**.
+(this repo runs them through `prek`); **commits only succeed if all hooks pass**.
 Julia code is formatted with both JuliaFormatter (config in `.JuliaFormatter.toml`:
 4-space indent, 92-char margin) and Runic. ExplicitImports checks that imports are
 explicit.
 
 **Always run `prek run -a` after making changes** (before considering work done /
-committing). It reformats and lints in place, so it may modify files — re-check and
+committing). It reformats and lints in place, so it may modify files; re-check and
 re-run until clean:
 
 ```bash

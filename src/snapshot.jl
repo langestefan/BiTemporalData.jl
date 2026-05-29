@@ -1,7 +1,7 @@
 """
     snapshot(s; valid_at = nothing, tx_at = now()) -> NamedTuple of column vectors
 
-Columnar point-in-time view of the whole store — the read boundary for bulk
+Columnar point-in-time view of the whole store, the read boundary for bulk
 workloads, since freezing `tx_at` is reproducible and leakage-proof. With
 `valid_at = nothing`, one row per record believed at `tx_at`, columns
 `entity, value, valid_from, valid_to`. With a `valid_at::Date`, the collapsed

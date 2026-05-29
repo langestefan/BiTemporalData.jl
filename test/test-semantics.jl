@@ -1,7 +1,7 @@
 # The backend-agnostic semantic contract. Every backend's test file calls
 # `SemanticSuite.run_semantic_suite(make_store)` with its own constructor; all
 # must pass the same nine scenarios. Timestamps are passed explicitly via `ts=`
-# for determinism — no `sleep`, no clock races.
+# for determinism; no `sleep`, no clock races.
 @testmodule SemanticSuite begin
     using BiTemporalData
     using Dates
