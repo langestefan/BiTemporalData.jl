@@ -24,6 +24,7 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
   `as_of`, `history`.
 - `snapshot.jl` — `snapshot`.
 - `memory.jl` — `MemoryStore` and its four primitive methods.
+- `threadsafe.jl` — `ThreadSafe`, an operation-level locking wrapper.
 
 ## Architecture (per DESIGN.md)
 
@@ -38,6 +39,11 @@ The design separates an **abstract store interface** from concrete backends:
   with a faster native path.
 - `MemoryStore` is the reference backend and the contract reference for the
   semantic test suite.
+- `ThreadSafe(store)` wraps any backend with a store-wide `ReentrantLock`. It
+  locks at the **operation** layer (not per-primitive), so multi-primitive writes
+  like `correct!`/`amend!` stay atomic — it delegates each operation to the inner
+  store, whose primitive calls then run inside that one lock. It also passes the
+  full semantic suite, so the suite doubles as its correctness check.
 
 Key invariants that shape the whole design: records are **append-only** (only
 `tx_to` may be mutated, to close it), all intervals are **half-open `[from, to)`**,

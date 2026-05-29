@@ -2,7 +2,8 @@
     MemoryStore{K,V}()
 
 In-memory reference backend. Records are kept per key in append order; `id` is
-`(key, index)` so [`close_tx!`](@ref) is an O(1) lookup. Not thread-safe.
+`(key, index)` so [`close_tx!`](@ref) is an O(1) lookup. Not thread-safe; wrap
+in [`ThreadSafe`](@ref) for concurrent use.
 """
 mutable struct MemoryStore{K, V} <: BitemporalStore{K, V}
     records::Dict{K, Vector{Record{V}}}

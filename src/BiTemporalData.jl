@@ -7,9 +7,10 @@ include("interface.jl")
 include("defaults.jl")
 include("snapshot.jl")
 include("memory.jl")
+include("threadsafe.jl")
 
 # Core types and sentinels
-export BitemporalStore, MAX_DATE, MAX_DT, MemoryStore, Record
+export BitemporalStore, MAX_DATE, MAX_DT, MemoryStore, Record, ThreadSafe
 
 # Default operations (insert! extends Base.insert!, so it is not re-exported)
 export amend!, as_of, correct!, history, snapshot
