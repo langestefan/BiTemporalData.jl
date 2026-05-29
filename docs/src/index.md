@@ -77,4 +77,28 @@ With a `valid_at` it collapses to one value per entity:
 snapshot(s; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2))
 ```
 
+## Analytical queries
+
+Three operations build on `snapshot`. [`diff`](@ref) reports what the store's
+beliefs changed between two transaction times, classifying each row as
+`:inserted`, `:retracted`, or `:corrected`:
+
+```@example bt
+diff(s; tx_at_old = DateTime(2024, 1, 2), tx_at_new = DateTime(2024, 8, 2))
+```
+
+[`as_of_batch`](@ref) answers many point-in-time lookups in one pass, ideal for
+building leakage-free training sets:
+
+```@example bt
+as_of_batch(
+    s,
+    ["AAPL", "AAPL"],
+    [Date(2024, 3, 1), Date(2024, 9, 1)],
+    [DateTime(2024, 8, 2), DateTime(2024, 8, 2)],
+)
+```
+
+[`asof_join`](@ref) inner-joins two stores on `entity` at one point in time.
+
 See the [Reference](@ref reference) for the full API.

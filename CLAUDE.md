@@ -23,6 +23,7 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 - `defaults.jl`: `insert!` (extends `Base.insert!`), `correct!`, `amend!`,
   `as_of`, `history`.
 - `snapshot.jl`: `snapshot`.
+- `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built on `snapshot`/`get_records`.
 - `memory.jl`: `MemoryStore` and its four primitive methods.
 - `threadsafe.jl`: `ThreadSafe`, an operation-level locking wrapper.
 
@@ -64,9 +65,9 @@ Implementation specifics worth knowing before editing:
 - `history`/`snapshot` return a `NamedTuple` of equal-length column vectors. That is
   already a valid Tables.jl column table, so the package has **no `Tables`
   dependency** (`Tables` is a test-only dep used to verify the round-trip).
-- `insert!` extends `Base.insert!` (to avoid an export collision), so it is *not* in
-  the `export` list and `@autodocs` won't pick it up; `docs/src/reference.md`
-  documents it with an explicit signature-filtered `@docs` block.
+- `insert!` and `diff` extend `Base` functions (to avoid export collisions), so they
+  are *not* in the `export` list and `@autodocs` won't pick them up;
+  `docs/src/reference.md` documents them with explicit signature-filtered `@docs` blocks.
 - `snapshot` can't dispatch on keywords, so it selects its two modes via a
   `valid_at` sentinel (`nothing` → full tx-slice; a `Date` → collapsed
   cross-section).

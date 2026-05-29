@@ -130,6 +130,14 @@ julia> snapshot(store; tx_at = DateTime(2024, 8, 2))
 | `history`  | Full audit trail for a key, as a Tables.jl column table            |
 | `snapshot` | Columnar point-in-time view of the whole store                     |
 
+Three more operations build on `snapshot`:
+
+| Function      | Purpose                                                         |
+| ------------- | --------------------------------------------------------------- |
+| `asof_join`   | Inner-join two stores on `entity` at one point in time          |
+| `diff`        | Records whose believed value changed between two `tx_at` times  |
+| `as_of_batch` | Vectorised `as_of` for many `(key, valid_at, tx_at)` triples    |
+
 ## Backends and concurrency
 
 `MemoryStore` is the in-memory reference backend. Stores are single-threaded by

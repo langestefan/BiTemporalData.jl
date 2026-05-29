@@ -12,11 +12,12 @@ Pages = ["reference.md"]
 
 ## Operations
 
-`insert!` extends `Base.insert!`, so it is documented explicitly here; the
-remaining operations and types are listed below.
+`insert!` and `diff` extend `Base` functions, so they are documented explicitly
+here; the remaining operations and types are listed below.
 
 ```@docs
 insert!(::BitemporalStore, ::Any, ::Any)
+diff(::BitemporalStore)
 ```
 
 ```@autodocs
