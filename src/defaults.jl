@@ -40,6 +40,30 @@ function correct!(
     return put_record!(s, key, Record{V}(nothing, value, valid_from, valid_to, ts, MAX_DT))
 end
 
+# Turn a column spec into a `row -> value` accessor: a `Symbol` reads that column,
+# a function is used as-is (for computed columns), anything else is a constant.
+_accessor(spec::Symbol) = Base.Fix2(getcolumn, spec)
+_accessor(spec::Base.Callable) = spec
+_accessor(spec) = Returns(spec)
+
+"""
+    load!(s, table; key, value, valid_from, ts, valid_to = MAX_DATE)
+
+Bulk-load bitemporal observations from any [Tables.jl](https://github.com/JuliaData/Tables.jl)
+source (a `DataFrame`, `CSV.File`, vector of `NamedTuple`s, ...). Each mapping is a
+column-name `Symbol`, a `row -> value` function (for computed columns), or a
+constant. Rows are processed in ascending `ts` order and each is recorded with
+[`correct!`](@ref), so repeated observations of the same key and valid range chain
+together in transaction time. Returns `s`.
+"""
+function load!(s::BitemporalStore, table; key, value, valid_from, ts, valid_to = MAX_DATE)
+    k, v, vf, vt, t = _accessor.((key, value, valid_from, valid_to, ts))
+    for r in sort(collect(rows(table)); by = t)
+        correct!(s, k(r), v(r); valid_from = vf(r), valid_to = vt(r), ts = t(r))
+    end
+    return s
+end
+
 """
     amend!(s, key, value; effective, ts = now())
 
