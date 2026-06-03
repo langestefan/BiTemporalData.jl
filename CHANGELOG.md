@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning].
 ## [Unreleased]
 
 - Initial release
+- Add `load!` to bulk-ingest a Tables.jl source (e.g. a `DataFrame` or `CSV.File`)
+  into a store, mapping columns to `key`/`value`/`valid_from`/`valid_to`/`ts`.
+- Add a readable `show` for any `BitemporalStore` (summary instead of a full dump).
 
 <!-- Links -->
 
