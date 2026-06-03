@@ -9,6 +9,7 @@ include("snapshot.jl")
 include("analytical.jl")
 include("memory.jl")
 include("threadsafe.jl")
+include("display.jl")
 
 # Core types and sentinels
 export BitemporalStore, MAX_DATE, MAX_DT, MemoryStore, Record, ThreadSafe
