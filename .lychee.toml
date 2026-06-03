@@ -2,6 +2,7 @@ exclude = [
   "@ref",
   "@cite",
   "^https://github.com/.*/releases/tag/v.*$",
+  "^https://github.com/.*/compare/.*$", # unreleased CHANGELOG link; tag missing until release
   "^https://doi.org/FIXME$",
   "^https://langestefan.github.io/BiTemporalData.jl/stable",
   "^https://blog.esciencecenter.nl", # due to a certificate error (cf. #556)
