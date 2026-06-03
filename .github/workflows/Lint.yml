@@ -22,11 +22,11 @@ jobs:
       - name: Clone
         uses: actions/checkout@v6
       - name: Setup Julia
-        uses: julia-actions/setup-julia@v2
+        uses: julia-actions/setup-julia@v3
         with:
           version: "1"
       - name: Use Julia cache
-        uses: julia-actions/cache@v2
+        uses: julia-actions/cache@v3
       - name: Install Julia packages
         # ExplicitImports' pre-commit hook is `language: script`; it loads
         # ExplicitImports from the default environment, so install it here too.
@@ -34,7 +34,7 @@ jobs:
       - name: Hack for setup-python cache # https://github.com/actions/setup-python/issues/807
         run: touch requirements.txt
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           cache: "pip"
           python-version: "3.11"
