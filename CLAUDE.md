@@ -76,7 +76,7 @@ Implementation specifics worth knowing before editing:
 
 ## Commands
 
-Run from the repository root. Tests use the [TestItemRunner](https://github.com/julia-vscode/TestItemRunner)
+Run from the repository root. Tests use the [TestItemRunner](https://github.com/julia-vscode/TestItemRunner.jl)
 framework (`@testitem` / `@testsnippet` / `@testmodule` blocks in `test/test-*.jl`,
 discovered by `test/runtests.jl`).
 
