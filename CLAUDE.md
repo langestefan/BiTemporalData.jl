@@ -21,7 +21,7 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
   the internal `_close`/`_overlaps`/`_believed` helpers.
 - `interface.jl`: the four backend primitive declarations.
 - `defaults.jl`: `insert!` (extends `Base.insert!`), `correct!`, `amend!`,
-  `as_of`, `history`.
+  `as_of`, `history`, and `load!` (bulk-ingest a Tables.jl source via `correct!`).
 - `snapshot.jl`: `snapshot`.
 - `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built on `snapshot`/`get_records`.
 - `memory.jl`: `MemoryStore` and its four primitive methods.
@@ -62,9 +62,11 @@ or wall-clock timing.
 
 Implementation specifics worth knowing before editing:
 
-- `history`/`snapshot` return a `NamedTuple` of equal-length column vectors. That is
-  already a valid Tables.jl column table, so the package has **no `Tables`
-  dependency** (`Tables` is a test-only dep used to verify the round-trip).
+- `history`/`snapshot` return a `NamedTuple` of equal-length column vectors, which
+  is already a valid Tables.jl column table (no conversion needed on the read side).
+  The package depends on `Tables` only on the **write** side: `load!` consumes any
+  Tables.jl source. The test suite still uses `Tables` directly to verify the
+  read-side round-trip.
 - `insert!` and `diff` extend `Base` functions (to avoid export collisions), so they
   are *not* in the `export` list and `@autodocs` won't pick them up;
   `docs/src/reference.md` documents them with explicit signature-filtered `@docs` blocks.
@@ -95,8 +97,9 @@ each with its own `Project.toml`.
 
 To run a single test item interactively, open Julia with `--project=.`, `using
 TestItemRunner`, and use `@run_package_tests filter=...` to select by name or tag.
-Test items are tagged (`:unit`, `:fast`, `:integration`, `:slow`, `:validation`);
-filter on tags to run a subset.
+Test items are tagged `:unit` (semantics, backends, analytical) or `:quality`
+(`test-quality.jl`: Aqua + JET static analysis); filter on tags to run a subset,
+e.g. `@run_package_tests filter = ti -> :quality in ti.tags`.
 
 ## Linting & formatting
 

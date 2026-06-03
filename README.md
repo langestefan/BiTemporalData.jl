@@ -123,6 +123,7 @@ julia> snapshot(store; tx_at = DateTime(2024, 8, 2))
 
 | Function   | Purpose                                                            |
 | ---------- | ------------------------------------------------------------------ |
+| `load!`    | Bulk-ingest a Tables.jl source (`DataFrame`, `CSV.File`)           |
 | `insert!`  | Record a new fact over a valid range                               |
 | `correct!` | Supersede a value we now believe was wrong (history preserved)     |
 | `amend!`   | Split the timeline when the world changes on a date                |
