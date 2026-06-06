@@ -30,8 +30,8 @@ Concretely:
 
 ## Backends
 
-One abstract store, three interchangeable backends. The persistent ones are
-package extensions: add the package and the backend lights up.
+BiTemporalData.jl implements the bitemporal logic; a backend stores the records.
+The persistent backends load when you add their package:
 
 | Backend             | Storage             | Best for                                | Load with      |
 | ------------------- | ------------------- | --------------------------------------- | -------------- |
@@ -39,9 +39,7 @@ package extensions: add the package and the backend lights up.
 | 🗃️ `SQLiteStore`    | on-disk, row store  | durable single-file storage, audit logs | `using SQLite` |
 | 🦆 `DuckDBStore`    | on-disk, columnar   | bulk analytics, ML snapshots            | `using DuckDB` |
 
-🔒 Wrap any backend in `ThreadSafe(store)` for safe concurrent access. `DuckDBStore`
-additionally serves the bulk read path (`snapshot`) from a single native columnar
-query.
+🔒 Wrap any backend in `ThreadSafe(store)` for concurrent access.
 
 ## Installation
 
