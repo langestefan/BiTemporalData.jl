@@ -31,5 +31,7 @@ jobs:
           - windows-latest
 
         arch:
-          - x64
+          # "default" lets setup-julia pick the right arch per runner: x64 on
+          # Linux/Windows, aarch64 on the now-Apple-Silicon macOS-latest.
+          - default
         allow_failure: [false]
