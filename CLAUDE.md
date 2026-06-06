@@ -26,6 +26,8 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 - `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built on `snapshot`/`get_records`.
 - `memory.jl`: `MemoryStore` and its four primitive methods.
 - `threadsafe.jl`: `ThreadSafe`, an operation-level locking wrapper.
+- `display.jl`: `Base.show` (compact and `text/plain`) for any store, built only
+  on the `entities`/`get_records` primitives so every backend prints identically.
 
 ## Architecture (per DESIGN.md)
 
@@ -93,7 +95,9 @@ julia --project=docs -e 'using LiveServer; servedocs()'
 ```
 
 The `[workspace]` in `Project.toml` declares `test` and `docs` as sub-projects,
-each with its own `Project.toml`.
+each with its own `Project.toml`. The `examples/` directory is a self-contained
+runnable demo with its own environment (`julia --project=examples
+examples/weather_bitemporal.jl`); it is not part of the workspace.
 
 To run a single test item interactively, open Julia with `--project=.`, `using
 TestItemRunner`, and use `@run_package_tests filter=...` to select by name or tag.
@@ -103,11 +107,13 @@ e.g. `@run_package_tests filter = ti -> :quality in ti.tags`.
 
 ## Linting & formatting
 
-Linting/formatting is enforced via [pre-commit](https://pre-commit.com) hooks
-(this repo runs them through `prek`); **commits only succeed if all hooks pass**.
-Julia code is formatted with both JuliaFormatter (config in `.JuliaFormatter.toml`:
-4-space indent, 92-char margin) and Runic. ExplicitImports checks that imports are
-explicit.
+Linting/formatting is enforced via [pre-commit](https://pre-commit.com)-format
+hooks run through [`prek`](https://github.com/j178/prek), both locally and in CI
+(the `Lint.yml` workflow does `prek run --all-files`); **commits only succeed if
+all hooks pass**. Julia code is formatted with Runic (opinionated, no config) and
+ExplicitImports checks that imports are explicit. The Runic hook is `language:
+julia`, so prek provisions Runic itself; the ExplicitImports hook is `language:
+script`, so CI installs `ExplicitImports` into the default Julia environment.
 
 **Always run `prek run -a` after making changes** (before considering work done /
 committing). It reformats and lints in place, so it may modify files; re-check and

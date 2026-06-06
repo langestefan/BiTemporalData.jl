@@ -28,35 +28,39 @@ You will create branches and push to `origin`, and you will fetch and update you
 Install a plugin on your editor to use [EditorConfig](https://editorconfig.org).
 This will ensure that your editor is configured with important formatting settings.
 
-We use [https://pre-commit.com](https://pre-commit.com) to run the linters and formatters.
-In particular, the Julia code is formatted using [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl), so please install it globally first:
+We use [`prek`](https://github.com/j178/prek) (a fast, drop-in
+[pre-commit](https://pre-commit.com) reimplementation) to run the linters and
+formatters, both locally and in CI. The Julia code is formatted using
+[Runic.jl](https://github.com/fredrikekre/Runic.jl); `prek` provisions Runic
+itself, but the ExplicitImports check runs from your global environment, so
+install it there first:
 
 ```julia-repl
 julia> # Press ]
 pkg> activate
-pkg> add JuliaFormatter
+pkg> add ExplicitImports
 ```
 
-To install `pre-commit`, we recommend using [pipx](https://pipx.pypa.io) as follows:
+To install `prek`, we recommend using [pipx](https://pipx.pypa.io) as follows:
 
 ```bash
 # Install pipx following the link
-pipx install pre-commit
+pipx install prek
 ```
 
-With `pre-commit` installed, activate it as a pre-commit hook:
+With `prek` installed, activate it as a git pre-commit hook:
 
 ```bash
-pre-commit install
+prek install
 ```
 
 To run the linting and formatting manually, enter the command below:
 
 ```bash
-pre-commit run -a
+prek run -a
 ```
 
-**Now, you can only commit if all the pre-commit tests pass**.
+**Now, you can only commit if all the `prek` checks pass**.
 
 ### Link checking locally
 
