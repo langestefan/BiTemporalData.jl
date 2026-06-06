@@ -25,6 +25,14 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 - `snapshot.jl`: `snapshot`.
 - `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built on `snapshot`/`get_records`.
 - `memory.jl`: `MemoryStore` and its four primitive methods.
+- `sqlite.jl`: the `SQLiteStore` struct (DB handle as a type parameter) plus a
+  catch-all error constructor; the real constructors and the four primitive
+  methods live in `ext/BiTemporalDataSQLiteExt.jl` (loaded by `using SQLite`;
+  SQLite re-exports `DBInterface`, which the extension uses). The struct sits in
+  `src/` so its name is exportable
+  and `@autodocs` picks up its docstring; the extension holds all SQLite-touching
+  code (keys/values serialized to BLOBs, dates as `Dates.value` integers, `id` =
+  rowid).
 - `threadsafe.jl`: `ThreadSafe`, an operation-level locking wrapper.
 - `display.jl`: `Base.show` (compact and `text/plain`) for any store, built only
   on the `entities`/`get_records` primitives so every backend prints identically.
@@ -42,6 +50,12 @@ The design separates an **abstract store interface** from concrete backends:
   with a faster native path.
 - `MemoryStore` is the reference backend and the contract reference for the
   semantic test suite.
+- `SQLiteStore` is a persistent backend shipped as a **package extension**
+  (`[weakdeps]`/`[extensions]` on `SQLite`, plus `Serialization` which SQLite
+  loads transitively). It runs the same
+  semantic suite (`test/test-sqlite.jl`), so the suite is the shared correctness
+  check for every backend. New backends follow this pattern: struct in `src/`,
+  primitives in `ext/`.
 - `ThreadSafe(store)` wraps any backend with a store-wide `ReentrantLock`. It
   locks at the **operation** layer (not per-primitive), so multi-primitive writes
   like `correct!`/`amend!` stay atomic; it delegates each operation to the inner
