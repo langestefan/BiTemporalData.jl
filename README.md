@@ -28,6 +28,21 @@ Concretely:
   even after the inputs have since been revised.
 - **Auditing**: answer "what value did we believe on date X, and when did it change?"
 
+## Backends
+
+One abstract store, three interchangeable backends. The persistent ones are
+package extensions: add the package and the backend lights up.
+
+| Backend             | Storage             | Best for                                | Load with      |
+| ------------------- | ------------------- | --------------------------------------- | -------------- |
+| 🧠 `MemoryStore`    | in-memory           | tests, single runs, embedding           | built in       |
+| 🗃️ `SQLiteStore`    | on-disk, row store  | durable single-file storage, audit logs | `using SQLite` |
+| 🦆 `DuckDBStore`    | on-disk, columnar   | bulk analytics, ML snapshots            | `using DuckDB` |
+
+🔒 Wrap any backend in `ThreadSafe(store)` for safe concurrent access. `DuckDBStore`
+additionally serves the bulk read path (`snapshot`) from a single native columnar
+query.
+
 ## Installation
 
 ```julia
@@ -128,32 +143,24 @@ column table.
 
 ## Backends and concurrency
 
-`MemoryStore` is the in-memory reference backend. Stores are single-threaded;
-wrap one in `ThreadSafe` to serialize whole operations behind a store-wide lock:
+Every backend has the same `{K, V}` constructor; the persistent ones take a file
+path (or `":memory:"`):
 
 ```julia
-safe = ThreadSafe(MemoryStore{String, Float64}())
-```
+mem = MemoryStore{String, Float64}()             # in-memory
 
-`SQLiteStore` is a persistent backend, loaded as an extension when you add
-SQLite. Pass a file path (or `":memory:"`):
-
-```julia
 using SQLite
-store = SQLiteStore{String, Float64}("data.db")
-```
+sqlite = SQLiteStore{String, Float64}("data.db")
 
-`DuckDBStore` is a persistent, columnar backend, loaded as an extension when you
-add DuckDB. It overrides `snapshot` with a single native query, so the bulk read
-path is one columnar scan:
-
-```julia
 using DuckDB
-store = DuckDBStore{String, Float64}("data.duckdb")
+duck = DuckDBStore{String, Float64}("data.duckdb")
+
+safe = ThreadSafe(mem)                           # wrap any backend for concurrency
 ```
 
-Like `MemoryStore`, the persistent backends' multi-step writes (`correct!`,
-`amend!`) are not atomic across a crash.
+`ThreadSafe` serializes whole operations behind one store-wide lock. The
+persistent backends' multi-step writes (`correct!`, `amend!`) are not atomic
+across a crash, same as `MemoryStore`.
 
 The data model is defined against an abstract `BitemporalStore` interface (four
 primitives: `get_records`, `put_record!`, `close_tx!`, `entities`), so new
