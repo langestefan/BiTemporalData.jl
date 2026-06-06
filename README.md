@@ -135,6 +135,17 @@ wrap one in `ThreadSafe` to serialize whole operations behind a store-wide lock:
 safe = ThreadSafe(MemoryStore{String, Float64}())
 ```
 
+`SQLiteStore` is a persistent backend, loaded as an extension when you add
+SQLite. Pass a file path (or `":memory:"`):
+
+```julia
+using SQLite, DBInterface
+store = SQLiteStore{String, Float64}("data.db")
+```
+
+Like `MemoryStore`, its multi-step writes (`correct!`, `amend!`) are not atomic
+across a crash.
+
 The data model is defined against an abstract `BitemporalStore` interface (four
 primitives: `get_records`, `put_record!`, `close_tx!`, `entities`), so new
 backends ship without changing the core.

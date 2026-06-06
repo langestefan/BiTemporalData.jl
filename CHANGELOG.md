@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning].
 - Add `load!` to bulk-ingest a Tables.jl source (e.g. a `DataFrame` or `CSV.File`)
   into a store, mapping columns to `key`/`value`/`valid_from`/`valid_to`/`ts`.
 - Add a readable `show` for any `BitemporalStore` (summary instead of a full dump).
+- Add `SQLiteStore`, a persistent backend shipped as a package extension (load it
+  with `using SQLite, DBInterface`).
 
 <!-- Links -->
 
