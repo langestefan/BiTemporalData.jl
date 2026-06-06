@@ -33,6 +33,16 @@ not faster: `ThreadSafe` uses a single store-wide lock, so it buys concurrency
 *safety* (a raw SQLite connection is not safe to share across threads), not
 parallel speedup.
 
+### Backend comparison: `backends_compare.jl`
+
+```bash
+julia --project=examples examples/backends_compare.jl
+```
+
+Loads the same data into `MemoryStore`, `SQLiteStore`, and `DuckDBStore` and prints
+one line each (load time, `snapshot` time, and that the result matches). All three
+agree; the timings just show in-memory vs on-disk cost.
+
 ## Dataset: `weather_forecasts.csv`
 
 Midday (12:00 local) 2-metre temperature forecasts for three cities, retrieved
