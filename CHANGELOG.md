@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning].
 - Add a readable `show` for any `BitemporalStore` (summary instead of a full dump).
 - Add `SQLiteStore`, a persistent backend shipped as a package extension (load it
   with `using SQLite`).
+- Add `DuckDBStore`, a persistent columnar backend shipped as a package extension
+  (load it with `using DuckDB`); it overrides `snapshot` with a native query.
 
 <!-- Links -->
 

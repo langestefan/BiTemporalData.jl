@@ -143,8 +143,17 @@ using SQLite
 store = SQLiteStore{String, Float64}("data.db")
 ```
 
-Like `MemoryStore`, its multi-step writes (`correct!`, `amend!`) are not atomic
-across a crash.
+`DuckDBStore` is a persistent, columnar backend, loaded as an extension when you
+add DuckDB. It overrides `snapshot` with a single native query, so the bulk read
+path is one columnar scan:
+
+```julia
+using DuckDB
+store = DuckDBStore{String, Float64}("data.duckdb")
+```
+
+Like `MemoryStore`, the persistent backends' multi-step writes (`correct!`,
+`amend!`) are not atomic across a crash.
 
 The data model is defined against an abstract `BitemporalStore` interface (four
 primitives: `get_records`, `put_record!`, `close_tx!`, `entities`), so new

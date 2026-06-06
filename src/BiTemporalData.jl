@@ -10,11 +10,13 @@ include("snapshot.jl")
 include("analytical.jl")
 include("memory.jl")
 include("sqlite.jl")
+include("duckdb.jl")
 include("threadsafe.jl")
 include("display.jl")
 
 # Core types and sentinels
-export BitemporalStore, MAX_DATE, MAX_DT, MemoryStore, Record, SQLiteStore, ThreadSafe
+export BitemporalStore,
+    DuckDBStore, MAX_DATE, MAX_DT, MemoryStore, Record, SQLiteStore, ThreadSafe
 
 # Default operations (insert! and diff extend Base, so they are not re-exported)
 export amend!, as_of, as_of_batch, asof_join, correct!, history, load!, snapshot

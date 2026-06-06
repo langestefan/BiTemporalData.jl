@@ -29,10 +29,16 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
   catch-all error constructor; the real constructors and the four primitive
   methods live in `ext/BiTemporalDataSQLiteExt.jl` (loaded by `using SQLite`;
   SQLite re-exports `DBInterface`, which the extension uses). The struct sits in
-  `src/` so its name is exportable
-  and `@autodocs` picks up its docstring; the extension holds all SQLite-touching
-  code (keys/values serialized to BLOBs, dates as `Dates.value` integers, `id` =
-  rowid).
+  `src/` so its name is exportable and `@autodocs` picks up its docstring; the
+  extension holds all SQLite-touching code (keys/values serialized to BLOBs, dates
+  as `Dates.value` integers, `id` = rowid).
+- `duckdb.jl`: the `DuckDBStore` struct (DB handle as a type parameter) plus a
+  catch-all error constructor; the real constructors, the four primitives, and a
+  native `snapshot` override live in `ext/BiTemporalDataDuckDBExt.jl` (loaded by
+  `using DuckDB`; DuckDB re-exports `DBInterface`). The struct sits in `src/` so
+  its name is exportable and `@autodocs` picks up its docstring; the extension
+  holds all DuckDB-touching code (keys/values serialized to BLOBs, dates as
+  `Dates.value` integers, `id` from a DuckDB sequence via `RETURNING`).
 - `threadsafe.jl`: `ThreadSafe`, an operation-level locking wrapper.
 - `display.jl`: `Base.show` (compact and `text/plain`) for any store, built only
   on the `entities`/`get_records` primitives so every backend prints identically.
@@ -52,10 +58,16 @@ The design separates an **abstract store interface** from concrete backends:
   semantic test suite.
 - `SQLiteStore` is a persistent backend shipped as a **package extension**
   (`[weakdeps]`/`[extensions]` on `SQLite`, plus `Serialization` which SQLite
-  loads transitively). It runs the same
-  semantic suite (`test/test-sqlite.jl`), so the suite is the shared correctness
-  check for every backend. New backends follow this pattern: struct in `src/`,
-  primitives in `ext/`.
+  loads transitively). It runs the same semantic suite (`test/test-sqlite.jl`), so
+  the suite is the shared correctness check for every backend. New backends follow
+  this pattern: struct in `src/`, primitives in `ext/`.
+- `DuckDBStore` is a persistent, columnar backend shipped as a **package
+  extension** (`[weakdeps]`/`[extensions]` on `DuckDB`, plus `Serialization` which
+  DuckDB loads transitively). It implements the four primitives and additionally
+  **overrides `snapshot`** with one native columnar query: the concrete example of
+  "a backend may override any default with a faster native path." It runs the same
+  semantic suite (`test/test-duckdb.jl`), which also checks its native `snapshot`
+  against `MemoryStore`'s.
 - `ThreadSafe(store)` wraps any backend with a store-wide `ReentrantLock`. It
   locks at the **operation** layer (not per-primitive), so multi-primitive writes
   like `correct!`/`amend!` stay atomic; it delegates each operation to the inner
