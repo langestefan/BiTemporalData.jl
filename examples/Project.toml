@@ -2,4 +2,5 @@
 BiTemporalData = "081b2520-a7cf-5256-aaf1-5c8211e3260a"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DuckDB = "d2f5444f-75bc-4fdf-ac35-56f514c445e1"
 SQLite = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
