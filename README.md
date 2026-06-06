@@ -9,154 +9,139 @@
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![tested with JET.jl](https://img.shields.io/badge/%F0%9F%9B%A9%EF%B8%8F_tested_with-JET.jl-233f9a)](https://github.com/aviatesk/JET.jl)
 
-BiTemporalData.jl stores facts along two independent time axes:
+BiTemporalData.jl stores facts along two time axes:
 
-- **valid time**: when a fact is true in the world;
-- **transaction time**: when the system believed it.
+- **Valid time**: when a fact is true in the world.
+- **Transaction time**: when the system believed it was true.
 
-Tracking both lets you separate *the world changed* from *we changed our mind*,
-and reproduce exactly what was known at any past point in time. Writes are
-append-only (a correction never destroys what it supersedes), so the store is
-also a complete audit trail.
+This separates *the world changed* from *we changed our mind*. Writes are
+append-only, so you can reproduce exactly what was known at any past point.
 
-This is useful for:
+Concretely:
 
-- Financial and sensor time series with restatements, backfills, and late data
-- Reproducible, leakage-proof ML training sets (freeze a transaction time and re-run)
-- Audit trails and "what did we know, and when?" regulatory queries
-- Slowly-changing dimensions in analytics and data warehousing
+- **Forecasting**: build a training set from only the data available at each
+  forecast time, so a backtest never sees values that were corrected later.
+- **Finance and insurance**: reproduce a report exactly as it was filed, even
+  after prices are restated or reserves revised.
+- **Reproducibility**: re-run an analysis exactly as it stood at an earlier date,
+  even after the inputs have since been revised.
+- **Auditing**: answer "what value did we believe on date X, and when did it change?"
 
 ## Installation
 
-BiTemporalData.jl is not yet registered. Install it from GitHub:
-
 ```julia
-julia> using Pkg; Pkg.add(url = "https://github.com/langestefan/BiTemporalData.jl")
+using Pkg; Pkg.add(url = "https://github.com/langestefan/BiTemporalData.jl")
 ```
 
-## Example Usage
+## Quick start
+
+`ts` pins the transaction time for reproducible examples; omit it and it defaults
+to `now()`.
+
+A read picks one point on each axis. `valid_at` is the world date you ask about;
+`tx_at` is the belief you want, i.e. as of when the system knew it. Either can be
+omitted:
+
+| `valid_at`        | `tx_at`         | `as_of` returns                                     |
+| ----------------- | --------------- | --------------------------------------------------- |
+| a date            | a date          | the value believed at `tx_at` to hold on `valid_at` |
+| a date            | omitted (`now`) | what we believe now about `valid_at`                |
+| omitted (`today`) | a date          | what we believed at `tx_at` about today             |
+| omitted           | omitted         | what we believe now about today                     |
 
 ```julia
-julia> using BiTemporalData, Dates
+using BiTemporalData, Dates
 
-# A store of Float64 values keyed by String entities.
-julia> store = MemoryStore{String, Float64}();
+store = MemoryStore{String, Float64}()                    # String keys, Float64 values
 
-# Record a fact: AAPL = 100.0, valid from 2024-01-01 (open-ended).
-# `ts` pins the transaction time; omit it in real use and it defaults to `now()`.
-julia> insert!(store, "AAPL", 100.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1));
+# Record a fact valid from 2024-01-01 onward.
+insert!(store, "AAPL", 100.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
 
-# What do we currently believe holds on 2024-06-01?
-julia> as_of(store, "AAPL"; valid_at = Date(2024, 6, 1))
-100.0
+as_of(store, "AAPL"; valid_at = Date(2024, 6, 1))
+# 100.0
 ```
 
-### Correcting a mistake
+### Correct: we were wrong
 
-`correct!` supersedes a value we now believe was wrong. The old record is closed
-in transaction time, not deleted, so earlier beliefs stay reproducible:
+`correct!` supersedes a value. The old record is closed in transaction time, not
+deleted, so earlier beliefs stay reproducible.
 
 ```julia
-julia> correct!(store, "AAPL", 110.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 3));
+correct!(store, "AAPL", 110.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 3))
 
-# Current belief:
-julia> as_of(store, "AAPL"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 4))
-110.0
-
-# What we believed *before* the correction landed:
-julia> as_of(store, "AAPL"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 2))
-100.0
+as_of(store, "AAPL"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 4))
+# 110.0  (now)
+as_of(store, "AAPL"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 2))
+# 100.0  (before)
 ```
 
-### Amending when the world changes
+### Amend: the world changed
 
-`amend!` is different: the past value was *right*, but the world changed on a
-date. It splits the timeline, keeping the old value before the change:
+`amend!` splits the timeline on a date, keeping the old value before it.
 
 ```julia
-julia> amend!(store, "AAPL", 130.0; effective = Date(2024, 7, 1), ts = DateTime(2024, 8, 1));
+amend!(store, "AAPL", 130.0; effective = Date(2024, 7, 1), ts = DateTime(2024, 8, 1))
 
-julia> as_of(store, "AAPL"; valid_at = Date(2024, 3, 1), tx_at = DateTime(2024, 8, 2))   # before
-110.0
-
-julia> as_of(store, "AAPL"; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2))   # after
-130.0
+as_of(store, "AAPL"; valid_at = Date(2024, 3, 1), tx_at = DateTime(2024, 8, 2))
+# 110.0  (before)
+as_of(store, "AAPL"; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2))
+# 130.0  (after)
 ```
 
-### History and snapshots
+### Snapshots
 
-Open-ended ranges are marked with the exported sentinels `MAX_DATE` and `MAX_DT`
-(`typemax` of `Date`/`DateTime`):
+`snapshot` materializes the whole store as one flat table fixed at a transaction
+time, in a single pass. Every row reflects only what was known at that `tx_at`,
+so the same `tx_at` always yields the same table: hand it to any downstream tool
+(a `DataFrame`, a model, a report) and the result is fixed to that point in time.
 
 ```julia
-julia> MAX_DATE, MAX_DT
-(Date("252522163911149-12-31"), DateTime("146138512-12-31T23:59:59"))
+# With valid_at: one value per entity.
+snapshot(store; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2))
+# (entity = ["AAPL"], value = [130.0])
+
+# Without valid_at: one row per record believed at tx_at.
+snapshot(store; tx_at = DateTime(2024, 8, 2))
+# (entity = ["AAPL", "AAPL"], value = [110.0, 130.0], valid_from = [...], valid_to = [...])
 ```
 
-`history` returns every record ever written for a key (superseded ones
-included) as a [Tables.jl](https://github.com/JuliaData/Tables.jl)-compatible
-column table:
-
-```julia
-julia> history(store, "AAPL").value
-4-element Vector{Float64}:
- 100.0
- 110.0
- 110.0
- 130.0
-```
-
-`snapshot` is the read boundary for bulk/analytics workloads: a flat, columnar,
-point-in-time view of the whole store. Freezing `tx_at` makes it reproducible and
-leakage-proof. With a `valid_at`, it collapses to one value per entity:
-
-```julia
-julia> snapshot(store; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2))
-(entity = ["AAPL"], value = [130.0])
-
-# Without `valid_at`: one row per record believed at `tx_at`.
-julia> snapshot(store; tx_at = DateTime(2024, 8, 2))
-(entity = ["AAPL", "AAPL"], value = [110.0, 130.0], valid_from = [Date("2024-01-01"), Date("2024-07-01")], valid_to = [Date("2024-07-01"), Date("252522163911149-12-31")])
-```
+Open-ended ranges use the exported sentinels `MAX_DATE` and `MAX_DT`
+(`typemax(Date)` / `typemax(DateTime)`). The result of `snapshot`, `history`, and
+the analytical functions is a [Tables.jl](https://github.com/JuliaData/Tables.jl)
+column table.
 
 ## Operations
 
-| Function   | Purpose                                                            |
-| ---------- | ------------------------------------------------------------------ |
-| `load!`    | Bulk-ingest a Tables.jl source (`DataFrame`, `CSV.File`)           |
-| `insert!`  | Record a new fact over a valid range                               |
-| `correct!` | Supersede a value we now believe was wrong (history preserved)     |
-| `amend!`   | Split the timeline when the world changes on a date                |
-| `as_of`    | Read the value believed at `tx_at` to hold at `valid_at`           |
-| `history`  | Full audit trail for a key, as a Tables.jl column table            |
-| `snapshot` | Columnar point-in-time view of the whole store                     |
-
-Three more operations build on `snapshot`:
-
-| Function      | Purpose                                                         |
-| ------------- | --------------------------------------------------------------- |
-| `asof_join`   | Inner-join two stores on `entity` at one point in time          |
-| `diff`        | Records whose believed value changed between two `tx_at` times  |
-| `as_of_batch` | Vectorised `as_of` for many `(key, valid_at, tx_at)` triples    |
+| Function      | Purpose                                                       |
+| ------------- | ------------------------------------------------------------- |
+| `load!`       | Bulk-ingest a Tables.jl source (`DataFrame`, `CSV.File`)      |
+| `insert!`     | Record a new fact over a valid range                          |
+| `correct!`    | Supersede a value we now believe was wrong (history kept)     |
+| `amend!`      | Split the timeline when the world changes on a date           |
+| `as_of`       | Read the value believed at `tx_at` to hold at `valid_at`      |
+| `history`     | Full audit trail for a key                                    |
+| `snapshot`    | Columnar point-in-time view of the whole store                |
+| `asof_join`   | Inner-join two stores on `entity` at one point in time        |
+| `diff`        | Records whose believed value changed between two `tx_at`      |
+| `as_of_batch` | Vectorised `as_of` for many `(key, valid_at, tx_at)` triples  |
 
 ## Backends and concurrency
 
-`MemoryStore` is the in-memory reference backend. Stores are single-threaded by
-default; wrap one in `ThreadSafe` for concurrent access. It serializes whole
-operations behind a store-wide lock, so multi-step writes stay atomic:
+`MemoryStore` is the in-memory reference backend. Stores are single-threaded;
+wrap one in `ThreadSafe` to serialize whole operations behind a store-wide lock:
 
 ```julia
-julia> safe = ThreadSafe(MemoryStore{String, Float64}());
+safe = ThreadSafe(MemoryStore{String, Float64}())
 ```
 
 The data model is defined against an abstract `BitemporalStore` interface (four
-primitives: `get_records`, `put_record!`, `close_tx!`, `entities`), so additional
-backends will ship as package extensions without changing the core.
+primitives: `get_records`, `put_record!`, `close_tx!`, `entities`), so new
+backends ship without changing the core.
 
 ## How to Cite
 
-If you use BiTemporalData.jl in your work, please cite using the reference given in [CITATION.cff](https://github.com/langestefan/BiTemporalData.jl/blob/main/CITATION.cff).
+If you use BiTemporalData.jl in your work, please cite using [CITATION.cff](https://github.com/langestefan/BiTemporalData.jl/blob/main/CITATION.cff).
 
 ## Contributing
 
-If you want to make contributions of any kind, please first that a look into our [contributing guide directly on GitHub](docs/src/contributing.md) or the [contributing page on the website](https://langestefan.github.io/BiTemporalData.jl/dev/contributing/)
+See the [contributing guide](docs/src/contributing.md) or the [contributing page](https://langestefan.github.io/BiTemporalData.jl/dev/contributing/).
