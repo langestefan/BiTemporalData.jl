@@ -27,6 +27,12 @@ The same dataset and queries, but stored in an on-disk SQLite database through t
 it** in a fresh store, and runs the queries against the reopened file: the
 bitemporal history survives between the two halves with nothing kept in memory.
 
+It also wraps the store in `ThreadSafe` and times a batch of `as_of` lookups run
+sequentially vs. across threads (run it with `julia -t auto`). The threaded run is
+not faster: `ThreadSafe` uses a single store-wide lock, so it buys concurrency
+*safety* (a raw SQLite connection is not safe to share across threads), not
+parallel speedup.
+
 ## Dataset: `weather_forecasts.csv`
 
 Midday (12:00 local) 2-metre temperature forecasts for three cities, retrieved

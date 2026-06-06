@@ -52,4 +52,44 @@ println("\nForecasts revised between 2026-05-30 and 2026-06-01:")
 println(DataFrame(diff(store; tx_at_old = DateTime(2026, 5, 30), tx_at_new = DateTime(2026, 6, 1))))
 
 DBInterface.close!(store.db)
+
+# --- Concurrent access via ThreadSafe -----------------------------------------
+# A SQLite connection is not safe to share across threads. `ThreadSafe` serializes
+# whole operations behind one store-wide lock, which makes concurrent access
+# correct. Because that lock is store-wide, it is safety, not parallelism: the two
+# timings below should be close (the threaded run does not run reads in parallel),
+# and they should produce the same answer.
+
+using Base.Threads
+
+safe = ThreadSafe(SQLiteStore{String, Float64}(dbfile))
+
+# A fixed batch of point-in-time lookups (deterministic, so reruns compare).
+cities = ["Amsterdam", "Berlin", "London"]
+queries = [
+    (cities[mod1(i, 3)], Date(2026, 6, mod1(i, 6) + 1), DateTime(2026, 5, 27) + Day(mod1(i, 7)))
+        for i in 1:10_000
+]
+
+# Sum the looked-up temperatures (missing -> 0.0), as one task and as N tasks.
+ask(s, qs) = sum(q -> something(as_of(s, q[1]; valid_at = q[2], tx_at = q[3]), 0.0), qs; init = 0.0)
+
+function ask_par(s, qs)
+    chunks = Iterators.partition(qs, cld(length(qs), nthreads()))
+    tasks = map(chunk -> Threads.@spawn(ask(s, chunk)), collect(chunks))
+    return sum(fetch, tasks; init = 0.0)   # each task sums its own chunk: race-free
+end
+
+ask(safe, queries[1:100])       # warm up (compile) before timing
+ask_par(safe, queries[1:100])
+t_seq = @elapsed sum_seq = ask(safe, queries)
+t_par = @elapsed sum_par = ask_par(safe, queries)
+
+println("\nConcurrent reads through ThreadSafe(SQLiteStore) ($(length(queries)) `as_of` queries):")
+println("  threads available: $(nthreads())")
+println("  sequential: $(round(t_seq * 1000; digits = 1)) ms")
+println("  threaded:   $(round(t_par * 1000; digits = 1)) ms")
+println("  same result: $(sum_seq ≈ sum_par)  (single store-wide lock: safety, not a speedup)")
+
+DBInterface.close!(safe.store.db)
 println("\nThe database file remains at $(dbfile) for inspection (e.g. `sqlite3`).")
