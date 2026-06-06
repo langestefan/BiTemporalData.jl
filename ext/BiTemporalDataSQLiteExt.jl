@@ -1,7 +1,9 @@
 module BiTemporalDataSQLiteExt
 
+# SQLite re-exports DBInterface, so loading SQLite is enough to load the
+# extension; we reach `execute`/`lastrowid` through it.
 using SQLite: SQLite, DB
-using DBInterface: execute, lastrowid
+using SQLite.DBInterface: execute, lastrowid
 using Serialization: serialize, deserialize
 using Dates: Dates, Date, DateTime
 using BiTemporalData: SQLiteStore, Record, MAX_DT
@@ -50,7 +52,10 @@ function put_record!(s::SQLiteStore{K, V}, key, r::Record{V}) where {K, V}
         "INSERT INTO $(s.table) (key, value, valid_from, valid_to, tx_from, tx_to) " *
             "VALUES (?, ?, ?, ?, ?, ?)",
         (
-            _blob(key), _blob(r.value),
+            # Normalize the key to `K` first: serialization is type-sensitive, so
+            # the blob must not depend on the caller's concrete argument type
+            # (e.g. an `InlineString` from CSV vs a `String`).
+            _blob(convert(K, key)), _blob(r.value),
             Dates.value(r.valid_from), Dates.value(r.valid_to),
             Dates.value(r.tx_from), Dates.value(r.tx_to),
         ),
@@ -65,7 +70,7 @@ function get_records(s::SQLiteStore{K, V}, key) where {K, V}
             s.db,
             "SELECT id, value, valid_from, valid_to, tx_from, tx_to " *
                 "FROM $(s.table) WHERE key = ? ORDER BY id",
-            (_blob(key),),
+            (_blob(convert(K, key)),),
         )
         push!(
             out,

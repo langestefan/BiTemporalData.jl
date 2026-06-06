@@ -1,13 +1,13 @@
 @testitem "SQLiteStore passes the semantic suite" tags = [:unit] setup = [SemanticSuite] begin
     using BiTemporalData
-    using SQLite, DBInterface
+    using SQLite
 
     SemanticSuite.run_semantic_suite(() -> SQLiteStore{String, Float64}(":memory:"))
 end
 
 @testitem "SQLiteStore persists across reopen" tags = [:unit] begin
     using BiTemporalData
-    using SQLite, DBInterface
+    using SQLite
     using Dates
 
     mktempdir() do dir
@@ -30,9 +30,25 @@ end
     end
 end
 
+@testitem "SQLiteStore normalizes the key type" tags = [:unit] begin
+    using BiTemporalData
+    using SQLite
+    using Dates
+
+    # The key blob must be type-stable: a key passed as a `SubString` (or any
+    # type that converts to `K`) must match one stored as a `String`.
+    s = SQLiteStore{String, Float64}(":memory:")
+    insert!(s, "Amsterdam", 1.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+    sub = SubString("xAmsterdamx", 2, 10)   # == "Amsterdam", but not a String
+    @test sub isa SubString
+    @test as_of(s, sub; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 2, 1)) == 1.0
+    @test collect(entities(s)) == ["Amsterdam"]
+    @test eltype(entities(s)) == String
+end
+
 @testitem "ThreadSafe over SQLiteStore passes the semantic suite" tags = [:unit] setup = [SemanticSuite] begin
     using BiTemporalData
-    using SQLite, DBInterface
+    using SQLite
 
     SemanticSuite.run_semantic_suite(() -> ThreadSafe(SQLiteStore{String, Float64}(":memory:")))
 end

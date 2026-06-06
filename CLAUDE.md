@@ -27,8 +27,9 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 - `memory.jl`: `MemoryStore` and its four primitive methods.
 - `sqlite.jl`: the `SQLiteStore` struct (DB handle as a type parameter) plus a
   catch-all error constructor; the real constructors and the four primitive
-  methods live in `ext/BiTemporalDataSQLiteExt.jl` (loaded when `SQLite` and
-  `DBInterface` are present). The struct sits in `src/` so its name is exportable
+  methods live in `ext/BiTemporalDataSQLiteExt.jl` (loaded by `using SQLite`;
+  SQLite re-exports `DBInterface`, which the extension uses). The struct sits in
+  `src/` so its name is exportable
   and `@autodocs` picks up its docstring; the extension holds all SQLite-touching
   code (keys/values serialized to BLOBs, dates as `Dates.value` integers, `id` =
   rowid).
@@ -50,7 +51,8 @@ The design separates an **abstract store interface** from concrete backends:
 - `MemoryStore` is the reference backend and the contract reference for the
   semantic test suite.
 - `SQLiteStore` is a persistent backend shipped as a **package extension**
-  (`[weakdeps]`/`[extensions]` on `SQLite`+`DBInterface`). It runs the same
+  (`[weakdeps]`/`[extensions]` on `SQLite`, plus `Serialization` which SQLite
+  loads transitively). It runs the same
   semantic suite (`test/test-sqlite.jl`), so the suite is the shared correctness
   check for every backend. New backends follow this pattern: struct in `src/`,
   primitives in `ext/`.

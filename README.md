@@ -139,7 +139,7 @@ safe = ThreadSafe(MemoryStore{String, Float64}())
 SQLite. Pass a file path (or `":memory:"`):
 
 ```julia
-using SQLite, DBInterface
+using SQLite
 store = SQLiteStore{String, Float64}("data.db")
 ```
 

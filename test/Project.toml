@@ -1,7 +1,6 @@
 [deps]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 BiTemporalData = "081b2520-a7cf-5256-aaf1-5c8211e3260a"
-DBInterface = "a10d1c49-ce27-4219-8d33-6db1a4562965"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 SQLite = "0aa819cd-b072-5ff4-a722-6bc24af294d9"

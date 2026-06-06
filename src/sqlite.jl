@@ -3,8 +3,8 @@
     SQLiteStore{K,V}(db::SQLite.DB; table = "records")
 
 SQLite-backed bitemporal store. Requires the SQLite extension: run
-`using SQLite, DBInterface` to load it. Pass a file `path` for a persistent
-store, or `":memory:"` for an ephemeral one.
+`using SQLite` to load it. Pass a file `path` for a persistent store, or
+`":memory:"` for an ephemeral one.
 
 Keys and values are stored via `Serialization` (so any `K`/`V` work); dates are
 stored as integers (`Dates.value`). The record `id` is the SQLite rowid.
@@ -24,7 +24,5 @@ end
 # Friendly error when the SQLite extension is not loaded. The extension defines
 # the real (more specific) `::AbstractString` / `::SQLite.DB` constructors.
 function SQLiteStore{K, V}(args...; kwargs...) where {K, V}
-    return error(
-        "SQLiteStore requires the SQLite extension; run `using SQLite, DBInterface` first.",
-    )
+    return error("SQLiteStore requires the SQLite extension; run `using SQLite` first.")
 end
