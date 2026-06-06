@@ -1,7 +1,8 @@
-# BiTemporalData
+# BiTemporalData.jl
 
 [![Stable Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://langestefan.github.io/BiTemporalData.jl/stable)
 [![Development documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://langestefan.github.io/BiTemporalData.jl/dev)
+
 [![Test workflow status](https://github.com/langestefan/BiTemporalData.jl/actions/workflows/Test.yml/badge.svg?branch=main)](https://github.com/langestefan/BiTemporalData.jl/actions/workflows/Test.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/langestefan/BiTemporalData.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/langestefan/BiTemporalData.jl)
 [![Lint workflow Status](https://github.com/langestefan/BiTemporalData.jl/actions/workflows/Lint.yml/badge.svg?branch=main)](https://github.com/langestefan/BiTemporalData.jl/actions/workflows/Lint.yml?query=branch%3Amain)
