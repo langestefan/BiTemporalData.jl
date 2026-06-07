@@ -61,7 +61,7 @@ end
 makedocs(;
     modules = [BiTemporalData],
     authors = "Stefan de Lange <langestefan@msn.com>",
-    repo = "https://github.com/langestefan/BiTemporalData.jl/blob/{commit}{path}#{line}",
+    repo = Documenter.Remotes.GitHub("langestefan", "BiTemporalData.jl"),
     sitename = "BiTemporalData.jl",
     format = Documenter.HTML(; canonical = "https://langestefan.github.io/BiTemporalData.jl"),
     pages = list_pages(),
