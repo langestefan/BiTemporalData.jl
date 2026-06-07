@@ -36,10 +36,15 @@ The persistent backends load when you add their package:
 | Backend             | Storage             | Best for                                | Load with      |
 | ------------------- | ------------------- | --------------------------------------- | -------------- |
 | 🧠 `MemoryStore`    | in-memory           | tests, single runs, embedding           | built in       |
+| 📊 `ColumnarStore`  | in-memory, columnar | fast `snapshot` for ML / bulk reads     | built in       |
 | 🗃️ `SQLiteStore`    | on-disk, row store  | durable single-file storage, audit logs | `using SQLite` |
-| 🦆 `DuckDBStore`    | on-disk, columnar   | bulk analytics, ML snapshots            | `using DuckDB` |
+| 🦆 `DuckDBStore`    | on-disk, columnar   | persistent bulk analytics               | `using DuckDB` |
 
 🔒 Wrap any backend in `ThreadSafe(store)` for concurrent access.
+
+`ColumnarStore` lays records out as parallel column vectors, so a `snapshot`'s
+`value` column is a contiguous `Vector{V}` built in one pass: ~7–24× faster than
+`MemoryStore` for the snapshot read path (see `bench/`).
 
 ## Installation
 

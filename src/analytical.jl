@@ -79,37 +79,91 @@ function Base.diff(
 end
 
 """
-    as_of_batch(s, keys, valid_ats, tx_ats) -> Vector{Union{V,Nothing}}
+    supports_parallel_reads(s) -> Bool
+
+Whether [`get_records`](@ref) on `s` is cheap and safe to call from many threads
+at once. In-memory backends (`MemoryStore`, `ColumnarStore`) return `true`;
+backends over a single mutable connection (`SQLiteStore`, `DuckDBStore`) keep the
+`false` default. This selects the strategy `as_of_batch(...; threaded = true)`
+uses, so a new backend only overrides it when concurrent `get_records` is safe.
+"""
+supports_parallel_reads(::BitemporalStore) = false
+
+# The as_of pick for one query: latest `tx_from` among records covering both.
+function _pick(recs, valid_at::Date, tx_at::DateTime)
+    best = nothing
+    for r in recs
+        if r.tx_from <= tx_at < r.tx_to && r.valid_from <= valid_at < r.valid_to &&
+                (best === nothing || r.tx_from > best.tx_from)
+            best = r
+        end
+    end
+    return best === nothing ? nothing : best.value
+end
+
+"""
+    as_of_batch(s, keys, valid_ats, tx_ats; threaded = false) -> Vector{Union{V,Nothing}}
 
 Vectorised [`as_of`](@ref): position `i` holds the value believed at `tx_ats[i]`
-to hold at `valid_ats[i]` for `keys[i]`, or `nothing`. Equivalent to broadcasting
-`as_of`, but fetches each key's records once instead of per call.
+to hold at `valid_ats[i]` for `keys[i]`, or `nothing`. Fetches each key's records
+once instead of per call.
+
+With `threaded = true` the batch is split across threads (running serially when
+only one is available), picking a strategy from [`supports_parallel_reads`](@ref):
+backends with parallel reads fetch one query per thread; the others fetch records
+serially (one per distinct key, connection-safe) and thread only the per-query
+scan.
 """
 function as_of_batch(
         s::BitemporalStore{K, V}, keys::Vector{K},
-        valid_ats::Vector{Date}, tx_ats::Vector{DateTime},
+        valid_ats::Vector{Date}, tx_ats::Vector{DateTime}; threaded::Bool = false,
     ) where {K, V}
     n = length(keys)
     (length(valid_ats) == n && length(tx_ats) == n) ||
         throw(DimensionMismatch("keys, valid_ats, and tx_ats must have equal length"))
-    result = Vector{Union{V, Nothing}}(undef, n)
+    if !threaded
+        return _batch_grouped(s, keys, valid_ats, tx_ats)
+    elseif supports_parallel_reads(s)
+        return _batch_flat(s, keys, valid_ats, tx_ats)
+    else
+        return _batch_prefetch(s, keys, valid_ats, tx_ats)
+    end
+end
+
+# One `get_records` per distinct key, then scan its queries.
+function _batch_grouped(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K, V}
+    result = Vector{Union{V, Nothing}}(undef, length(keys))
     bykey = Dict{K, Vector{Int}}()
-    for i in 1:n
+    for i in eachindex(keys)
         push!(get!(() -> Int[], bykey, keys[i]), i)
     end
     for (key, idxs) in bykey
         recs = get_records(s, key)
         for i in idxs
-            va, ta = valid_ats[i], tx_ats[i]
-            best = nothing
-            for r in recs
-                if r.tx_from <= ta < r.tx_to && r.valid_from <= va < r.valid_to &&
-                        (best === nothing || r.tx_from > best.tx_from)
-                    best = r
-                end
-            end
-            result[i] = best === nothing ? nothing : best.value
+            result[i] = _pick(recs, valid_ats[i], tx_ats[i])
         end
+    end
+    return result
+end
+
+# Thread over the queries. Only safe when `get_records` is cheap and thread-safe.
+function _batch_flat(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K, V}
+    result = Vector{Union{V, Nothing}}(undef, length(keys))
+    @threads for i in eachindex(keys)
+        result[i] = _pick(get_records(s, keys[i]), valid_ats[i], tx_ats[i])
+    end
+    return result
+end
+
+# Fetch serially (safe on one connection), then thread the scan over the cache.
+function _batch_prefetch(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K, V}
+    result = Vector{Union{V, Nothing}}(undef, length(keys))
+    cache = Dict{K, Vector{Record{V}}}()
+    for k in keys
+        haskey(cache, k) || (cache[k] = get_records(s, k))
+    end
+    @threads for i in eachindex(keys)
+        result[i] = _pick(cache[keys[i]], valid_ats[i], tx_ats[i])
     end
     return result
 end

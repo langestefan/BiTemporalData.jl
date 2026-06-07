@@ -27,3 +27,5 @@ function close_tx!(s::MemoryStore, (key, idx)::Tuple, ts::DateTime)
 end
 
 entities(s::MemoryStore) = keys(s.records)
+
+supports_parallel_reads(::MemoryStore) = true

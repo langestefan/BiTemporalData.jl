@@ -25,6 +25,11 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 - `snapshot.jl`: `snapshot`.
 - `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built on `snapshot`/`get_records`.
 - `memory.jl`: `MemoryStore` and its four primitive methods.
+- `columnar.jl`: `ColumnarStore`, an in-memory **struct-of-arrays** backend (each
+  record field is a column vector, plus a per-key row index). Same semantics as
+  `MemoryStore` but overrides `snapshot` with a single linear pass that builds the
+  `value` column contiguously: the fast read path for ML/bulk workloads
+  (~7–24× faster than `MemoryStore`, benchmarked in `bench/`).
 - `sqlite.jl`: the `SQLiteStore` struct (DB handle as a type parameter) plus a
   catch-all error constructor; the real constructors and the four primitive
   methods live in `ext/BiTemporalDataSQLiteExt.jl` (loaded by `using SQLite`;
