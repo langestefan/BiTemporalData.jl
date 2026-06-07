@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning].
 - Add a readable `show` for any `BitemporalStore` (summary instead of a full dump).
 - Add `ColumnarStore`, an in-memory struct-of-arrays backend with a native
   `snapshot` (~7-24x faster than `MemoryStore` for the read path; see `bench/`).
+- Add `as_of_batch(...; threaded = true)`, a backend-aware parallel batch read.
+  In-memory backends thread over the queries; on-disk backends fetch serially and
+  thread the scan. New backends opt in via `supports_parallel_reads`.
 - Add `SQLiteStore`, a persistent backend shipped as a package extension (load it
   with `using SQLite`).
 - Add `DuckDBStore`, a persistent columnar backend shipped as a package extension

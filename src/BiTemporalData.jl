@@ -1,5 +1,6 @@
 module BiTemporalData
 
+using Base.Threads: @threads, nthreads
 using Dates: Date, DateTime, now, today
 using Tables: getcolumn, rows
 
@@ -22,7 +23,7 @@ export BitemporalStore, ColumnarStore,
 # Default operations (insert! and diff extend Base, so they are not re-exported)
 export amend!, as_of, as_of_batch, asof_join, correct!, history, load!, snapshot
 
-# Backend primitives (for authors of new backends)
-export close_tx!, entities, get_records, put_record!
+# Backend primitives and traits (for authors of new backends)
+export close_tx!, entities, get_records, put_record!, supports_parallel_reads
 
 end

@@ -29,12 +29,30 @@ hand to a model or copy to a device.
 julia -t auto --project=bench bench/threaded_bench.jl
 ```
 
-Does multithreading help the batch read path (`as_of_batch`)? On a 16-thread box:
+`as_of_batch(...; threaded = true)` is backend-aware: it picks a strategy from
+`supports_parallel_reads`. In-memory backends (`parallel`) thread straight over
+the queries; on-disk backends and `ThreadSafe` (`serial`) fetch records serially
+(connection-safe) and thread only the per-query scan.
 
-- Threading the per-key scan while keeping the serial `bykey` grouping is
-  **Amdahl-capped at ~2×** (the grouping is 30–50% of the runtime).
-- Threading straight over the queries (no grouping) reaches **~4–6×**, even though
-  it does more total work — removing the serial step wins. The ceiling is ~5×, not
-  16×, because the work is memory-bandwidth-bound and allocates a record vector per
-  query. Caveat: the ungrouped path calls `get_records` per query, so it suits
-  in-memory backends, not the on-disk ones (one SQL query per lookup).
+Representative result, 1,000,000-query batch over 2000 entities, 16 threads:
+
+| Backend           | reads    | serial   | threaded | speedup |
+| ----------------- | -------- | -------- | -------- | ------- |
+| `MemoryStore`     | parallel | 159 ms   | 15 ms    | **10×** |
+| `ColumnarStore`   | parallel | 149 ms   | 48 ms    | 3.1×    |
+| `ThreadSafe(Col)` | serial   | 155 ms   | 51 ms    | 3.0×    |
+| `SQLiteStore`     | serial   | 165 ms   | 82 ms    | 2.0×    |
+| `DuckDBStore`     | serial   | 3.3 s    | 3.8 s    | ~1×     |
+
+Findings:
+
+- **In-memory backends win big.** `MemoryStore` scales best (~10×) because its
+  `get_records` hands back the stored vector with no allocation; `ColumnarStore`
+  rebuilds a record vector per call, so its flat path is allocation-bound (~3×).
+  (`ColumnarStore`'s strength is `snapshot`, not per-key `get_records`.)
+- **On-disk backends** thread only the scan, so the speedup grows with batch size
+  (more scan work) up to ~2×; the per-key SQL fetch is the serial floor and isn't
+  parallelized (a single connection isn't thread-safe). `DuckDBStore`'s fetch is
+  slow enough that the batch is fetch-bound and threading is moot.
+- The right strategy is selected automatically per backend; all combinations
+  return identical results to the serial path.

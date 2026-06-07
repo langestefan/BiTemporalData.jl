@@ -26,10 +26,10 @@ function build!(s)
 end
 
 backends = [
-    "MemoryStore"   => () -> MemoryStore{String, Float64}(),
+    "MemoryStore" => () -> MemoryStore{String, Float64}(),
     "ColumnarStore" => () -> ColumnarStore{String, Float64}(),
-    "SQLiteStore"   => () -> SQLiteStore{String, Float64}(":memory:"),
-    "DuckDBStore"   => () -> DuckDBStore{String, Float64}(":memory:"),
+    "SQLiteStore" => () -> SQLiteStore{String, Float64}(":memory:"),
+    "DuckDBStore" => () -> DuckDBStore{String, Float64}(":memory:"),
 ]
 
 println("Building stores: $N entities x 3 records = $(3N) records ...")
@@ -48,10 +48,11 @@ function report(title, f)
         t = @belapsed $f($s)
         a = @allocated f(s)
         base === nothing && (base = t)
-        unit, scale = t < 1e-3 ? ("µs", 1e6) : ("ms", 1e3)
+        unit, scale = t < 1.0e-3 ? ("µs", 1.0e6) : ("ms", 1.0e3)
         rel = t <= base ? "$(round(base / t; digits = 1))x" : "$(round(t / base; digits = 0))x slower"
         @printf "%-15s %9.1f %2s %11.1f KiB  %-14s\n" name (t * scale) unit (a / 1024) rel
     end
+    return
 end
 
 report("full tx-slice snapshot  (entity, value, valid_from, valid_to)", full)

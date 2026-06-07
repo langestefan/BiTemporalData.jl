@@ -56,6 +56,8 @@ end
 
 entities(s::ColumnarStore) = keys(s.index)
 
+supports_parallel_reads(::ColumnarStore) = true
+
 # Native snapshot: one linear scan over the columns; the `value` column is built
 # contiguously without rebuilding any `Record`.
 function snapshot(
