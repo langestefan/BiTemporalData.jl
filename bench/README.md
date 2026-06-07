@@ -22,3 +22,19 @@ Representative result (your numbers will vary):
 `MemoryStore`'s array-of-structs), no `Serialization` decode (vs the on-disk
 backends). It also allocates 4–11× less. That contiguous `Vector{V}` is what you
 hand to a model or copy to a device.
+
+## `threaded_bench.jl`
+
+```bash
+julia -t auto --project=bench bench/threaded_bench.jl
+```
+
+Does multithreading help the batch read path (`as_of_batch`)? On a 16-thread box:
+
+- Threading the per-key scan while keeping the serial `bykey` grouping is
+  **Amdahl-capped at ~2×** (the grouping is 30–50% of the runtime).
+- Threading straight over the queries (no grouping) reaches **~4–6×**, even though
+  it does more total work — removing the serial step wins. The ceiling is ~5×, not
+  16×, because the work is memory-bandwidth-bound and allocates a record vector per
+  query. Caveat: the ungrouped path calls `get_records` per query, so it suits
+  in-memory backends, not the on-disk ones (one SQL query per lookup).
