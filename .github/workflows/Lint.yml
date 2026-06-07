@@ -34,12 +34,9 @@ jobs:
         # from the default environment. (The Runic hook is `language: julia`, so
         # prek provisions Runic itself.)
         run: julia -e 'using Pkg; pkg"add ExplicitImports"'
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
       - name: Install prek
-        run: pip install prek
+        # Standalone installer (no Python); it adds itself to $GITHUB_PATH.
+        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/j178/prek/releases/latest/download/prek-installer.sh | sh
       - name: Run prek
         run: SKIP=no-commit-to-branch prek run --all-files
 
