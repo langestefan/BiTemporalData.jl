@@ -72,6 +72,14 @@ end
     end
 end
 
+@testitem "DuckDBStore needs a path or connection" tags = [:unit] begin
+    using BiTemporalData
+    using DuckDB
+
+    # No path/DB matches no extension constructor, so the core stub fires.
+    @test_throws ErrorException DuckDBStore{String, Float64}()
+end
+
 @testitem "ThreadSafe over DuckDBStore passes the semantic suite" tags = [:unit] setup = [SemanticSuite] begin
     using BiTemporalData
     using DuckDB
