@@ -41,12 +41,20 @@ pkg> activate
 pkg> add ExplicitImports
 ```
 
-To install `prek`, we recommend using [pipx](https://pipx.pypa.io) as follows:
+To install `prek`, use its standalone installer (no Python required):
 
 ```bash
-# Install pipx following the link
-pipx install prek
+# macOS / Linux
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/j178/prek/releases/latest/download/prek-installer.sh | sh
 ```
+
+```powershell
+# Windows
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/j178/prek/releases/latest/download/prek-installer.ps1 | iex"
+```
+
+Or via a package manager: `brew install prek`, `cargo install --locked prek`, or
+`mise use prek`. See the [prek README](https://github.com/j178/prek) for details.
 
 With `prek` installed, activate it as a git pre-commit hook:
 
