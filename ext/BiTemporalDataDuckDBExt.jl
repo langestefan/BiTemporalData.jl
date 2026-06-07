@@ -5,16 +5,15 @@ module BiTemporalDataDuckDBExt
 using DuckDB: DuckDB, DB
 using DuckDB.DBInterface: execute
 using Serialization: serialize, deserialize
-using Dates: Dates, Date, DateTime, now
-using BiTemporalData: DuckDBStore, Record, MAX_DT
+using Dates: Dates, DateTime, TimeType, now
+using BiTemporalData: DuckDBStore, Record, MAX_DT, _instant
 import BiTemporalData: get_records, put_record!, close_tx!, entities, snapshot
 
 # Generic (de)serialization of keys and values to/from DuckDB BLOBs.
 _blob(x) = (io = IOBuffer(); serialize(io, x); take!(io))
 _unblob(b) = deserialize(IOBuffer(Vector{UInt8}(b)))
 
-# Dates are stored as their integer `Dates.value` (exact, and indexable).
-_date(n) = Date(Dates.UTD(n))
+# All four times are `DateTime`, stored as their integer `Dates.value`.
 _dt(n) = DateTime(Dates.UTM(n))
 
 _seq(table) = "$(table)_id_seq"
@@ -78,7 +77,7 @@ function get_records(s::DuckDBStore{K, V}, key) where {K, V}
             out,
             Record{V}(
                 row.id, _unblob(row.value),
-                _date(row.valid_from), _date(row.valid_to),
+                _dt(row.valid_from), _dt(row.valid_to),
                 _dt(row.tx_from), _dt(row.tx_to),
             ),
         )
@@ -106,14 +105,14 @@ end
 
 function snapshot(
         s::DuckDBStore{K, V};
-        valid_at::Union{Date, Nothing} = nothing, tx_at::DateTime = now(),
+        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(),
     ) where {K, V}
     t = Dates.value(tx_at)
     if valid_at === nothing
         ent = K[]
         val = V[]
-        vf = Date[]
-        vt = Date[]
+        vf = DateTime[]
+        vt = DateTime[]
         for row in execute(
                 s.db,
                 "SELECT key, value, valid_from, valid_to FROM $(s.table) " *
@@ -122,12 +121,12 @@ function snapshot(
             )
             push!(ent, _unblob(row.key))
             push!(val, _unblob(row.value))
-            push!(vf, _date(row.valid_from))
-            push!(vt, _date(row.valid_to))
+            push!(vf, _dt(row.valid_from))
+            push!(vt, _dt(row.valid_to))
         end
         return (entity = ent, value = val, valid_from = vf, valid_to = vt)
     else
-        v = Dates.value(valid_at)
+        v = Dates.value(_instant(valid_at))
         ent = K[]
         val = V[]
         # Per entity, the value with the latest tx_from among records that the

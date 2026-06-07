@@ -17,8 +17,10 @@ calls the module `Bitemporal`; the actual package/module is `BiTemporalData`.)
 
 Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 
-- `types.jl`: `Record`, `BitemporalStore`, the `MAX_DATE`/`MAX_DT` sentinels, and
-  the internal `_close`/`_overlaps`/`_believed` helpers.
+- `types.jl`: `Record` (both time axes are `DateTime`), `BitemporalStore`, the
+  `MAX_DT` sentinel, the `_instant(::TimeType)` normalizer (a `Date` becomes
+  midnight; the TimeZones extension adds a `ZonedDateTime` → UTC method), and the
+  internal `_close`/`_overlaps`/`_believed` helpers.
 - `interface.jl`: the four backend primitive declarations.
 - `defaults.jl`: `insert!` (extends `Base.insert!`), `correct!`, `amend!`,
   `as_of`, `history`, and `load!` (bulk-ingest a Tables.jl source via `correct!`).
@@ -81,8 +83,9 @@ The design separates an **abstract store interface** from concrete backends:
 
 Key invariants that shape the whole design: records are **append-only** (only
 `tx_to` may be mutated, to close it), all intervals are **half-open `[from, to)`**,
-and open-ended ranges use the `MAX_DATE` / `MAX_DT` sentinels. "Currently believed"
-means `tx_to == MAX_DT`.
+both axes are **`DateTime`**, and open-ended ranges use the `MAX_DT` sentinel.
+"Currently believed" means `tx_to == MAX_DT`. Public operations accept any
+`TimeType` for valid-time args and normalize through `_instant`.
 
 The **snapshot** is the intended read boundary for read-heavy workloads (ML, bulk
 analytics): a single linear pass producing a flat columnar table frozen at a fixed
@@ -104,7 +107,7 @@ Implementation specifics worth knowing before editing:
   are *not* in the `export` list and `@autodocs` won't pick them up;
   `docs/src/reference.md` documents them with explicit signature-filtered `@docs` blocks.
 - `snapshot` can't dispatch on keywords, so it selects its two modes via a
-  `valid_at` sentinel (`nothing` → full tx-slice; a `Date` → collapsed
+  `valid_at` sentinel (`nothing` → full tx-slice; a `TimeType` → collapsed
   cross-section).
 
 ## Commands

@@ -1,21 +1,19 @@
-"Sentinel for an open-ended `valid_to`: `typemax(Date)`."
-const MAX_DATE = typemax(Date)
-
-"Sentinel for an open `tx_to`: `typemax(DateTime)`. `tx_to == MAX_DT` means currently believed."
+"Sentinel for an open range end: `typemax(DateTime)`. `tx_to == MAX_DT` means currently believed."
 const MAX_DT = typemax(DateTime)
 
 """
     Record{V}
 
 Append-only bitemporal record: `value` over half-open `[valid_from, valid_to)`
-(valid time) and `[tx_from, tx_to)` (transaction time). Only `tx_to` may change
-(see [`close_tx!`](@ref)). `id` is backend-assigned by [`put_record!`](@ref).
+(valid time) and `[tx_from, tx_to)` (transaction time). Both axes are `DateTime`.
+Only `tx_to` may change (see [`close_tx!`](@ref)). `id` is backend-assigned by
+[`put_record!`](@ref).
 """
 struct Record{V}
     id::Any
     value::V
-    valid_from::Date
-    valid_to::Date
+    valid_from::DateTime
+    valid_to::DateTime
     tx_from::DateTime
     tx_to::DateTime
 end
@@ -29,6 +27,11 @@ Store of `V` values keyed by `K`. Backends implement [`get_records`](@ref),
 [`history`](@ref), [`snapshot`](@ref).
 """
 abstract type BitemporalStore{K, V} end
+
+# Normalize any time input to the stored `DateTime`. A `Date` becomes midnight; a
+# `DateTime` passes through. The TimeZones extension adds a `ZonedDateTime` method
+# that converts to the UTC instant (so times across zones order correctly).
+_instant(x::TimeType) = DateTime(x)
 
 # `Record` is immutable, so closing `tx_to` means rebuilding.
 _close(r::Record, ts::DateTime) =

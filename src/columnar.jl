@@ -15,8 +15,8 @@ use.
 struct ColumnarStore{K, V} <: BitemporalStore{K, V}
     key::Vector{K}
     value::Vector{V}
-    valid_from::Vector{Date}
-    valid_to::Vector{Date}
+    valid_from::Vector{DateTime}
+    valid_to::Vector{DateTime}
     tx_from::Vector{DateTime}
     tx_to::Vector{DateTime}
     index::Dict{K, Vector{Int}}   # key -> row positions, in append order
@@ -24,7 +24,7 @@ end
 
 function ColumnarStore{K, V}() where {K, V}
     return ColumnarStore{K, V}(
-        K[], V[], Date[], Date[], DateTime[], DateTime[], Dict{K, Vector{Int}}(),
+        K[], V[], DateTime[], DateTime[], DateTime[], DateTime[], Dict{K, Vector{Int}}(),
     )
 end
 
@@ -38,7 +38,7 @@ function get_records(s::ColumnarStore{K, V}, key) where {K, V}
 end
 
 # The as_of value for `key`, read from the columns. `nothing` if absent.
-function _value_at(s::ColumnarStore{K, V}, key, valid_at::Date, tx_at::DateTime) where {K, V}
+function _value_at(s::ColumnarStore{K, V}, key, valid_at::DateTime, tx_at::DateTime) where {K, V}
     rows = get(s.index, key, nothing)
     rows === nothing && return nothing
     best = 0
@@ -75,7 +75,7 @@ supports_parallel_reads(::ColumnarStore) = true
 # One pass over the columns, so `value` comes out contiguous.
 function snapshot(
         s::ColumnarStore{K, V};
-        valid_at::Union{Date, Nothing} = nothing, tx_at::DateTime = now(),
+        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(),
     ) where {K, V}
     if valid_at === nothing
         rows = findall(i -> s.tx_from[i] <= tx_at < s.tx_to[i], eachindex(s.key))
@@ -86,10 +86,11 @@ function snapshot(
             valid_to = s.valid_to[rows],
         )
     else
+        va = _instant(valid_at)
         ent = K[]
         val = V[]
         for key in keys(s.index)
-            v = _value_at(s, key, valid_at, tx_at)
+            v = _value_at(s, key, va, tx_at)
             v === nothing || (push!(ent, key); push!(val, v))
         end
         return (entity = ent, value = val)
@@ -99,26 +100,27 @@ end
 # as_of/as_of_batch read the columns directly to skip building Records.
 function as_of(
         s::ColumnarStore{K, V}, key;
-        valid_at::Date = today(), tx_at::DateTime = now(),
+        valid_at::TimeType = now(), tx_at::DateTime = now(),
     ) where {K, V}
-    return _value_at(s, key, valid_at, tx_at)
+    return _value_at(s, key, _instant(valid_at), tx_at)
 end
 
 function as_of_batch(
         s::ColumnarStore{K, V}, keys::Vector{K},
-        valid_ats::Vector{Date}, tx_ats::Vector{DateTime}; threaded::Bool = false,
+        valid_ats::Vector{<:TimeType}, tx_ats::Vector{DateTime}; threaded::Bool = false,
     ) where {K, V}
     n = length(keys)
     (length(valid_ats) == n && length(tx_ats) == n) ||
         throw(DimensionMismatch("keys, valid_ats, and tx_ats must have equal length"))
+    valid_dts = _instant.(valid_ats)
     result = Vector{Union{V, Nothing}}(undef, n)
     if threaded
         @threads for i in eachindex(keys)
-            result[i] = _value_at(s, keys[i], valid_ats[i], tx_ats[i])
+            result[i] = _value_at(s, keys[i], valid_dts[i], tx_ats[i])
         end
     else
         for i in eachindex(keys)
-            result[i] = _value_at(s, keys[i], valid_ats[i], tx_ats[i])
+            result[i] = _value_at(s, keys[i], valid_dts[i], tx_ats[i])
         end
     end
     return result

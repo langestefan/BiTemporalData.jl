@@ -124,9 +124,12 @@ snapshot(store; tx_at = DateTime(2024, 8, 2))
 # (entity = ["AAPL", "AAPL"], value = [110.0, 130.0], valid_from = [...], valid_to = [...])
 ```
 
-Open-ended ranges use the exported sentinels `MAX_DATE` and `MAX_DT`
-(`typemax(Date)` / `typemax(DateTime)`). The result of `snapshot`, `history`, and
-the analytical functions is a [Tables.jl](https://github.com/JuliaData/Tables.jl)
+Both time axes are `DateTime`. Valid-time arguments accept any `TimeType`: a
+`Date` is taken as midnight, a `DateTime` gives intraday precision, and a
+`ZonedDateTime` (with `using TimeZones`) is stored as its UTC instant so times
+across zones still order correctly. Open-ended ranges use the exported sentinel
+`MAX_DT` (`typemax(DateTime)`). The result of `snapshot`, `history`, and the
+analytical functions is a [Tables.jl](https://github.com/JuliaData/Tables.jl)
 column table.
 
 ## Operations

@@ -2,7 +2,7 @@
 # `BitemporalStore`; a backend may override any one with a faster native path.
 
 """
-    asof_join(a, b; valid_at = today(), tx_at = now()) -> NamedTuple of column vectors
+    asof_join(a, b; valid_at = now(), tx_at = now()) -> NamedTuple of column vectors
 
 Inner-join two stores on `entity` at one `(valid_at, tx_at)` point. The stores
 must share the key type `K`. Columns `entity`, `a`, `b`, with one row per entity
@@ -11,7 +11,7 @@ dropped). Tables.jl-compatible.
 """
 function asof_join(
         a::BitemporalStore{K, Va}, b::BitemporalStore{K, Vb};
-        valid_at::Date = today(), tx_at::DateTime = now(),
+        valid_at::TimeType = now(), tx_at::DateTime = now(),
     ) where {K, Va, Vb}
     sa = snapshot(a; valid_at, tx_at)
     sb = snapshot(b; valid_at, tx_at)
@@ -41,7 +41,7 @@ iff nothing the store believes changed. Extends `Base.diff`. Tables.jl-compatibl
 function Base.diff(
         s::BitemporalStore{K, V}; tx_at_old::DateTime, tx_at_new::DateTime,
     ) where {K, V}
-    asmap(snap) = Dict{Tuple{K, Date, Date}, V}(
+    asmap(snap) = Dict{Tuple{K, DateTime, DateTime}, V}(
         (snap.entity[i], snap.valid_from[i], snap.valid_to[i]) => snap.value[i]
             for i in eachindex(snap.entity)
     )
@@ -49,8 +49,8 @@ function Base.diff(
     newmap = asmap(snapshot(s; tx_at = tx_at_new))
 
     entity = K[]
-    valid_from = Date[]
-    valid_to = Date[]
+    valid_from = DateTime[]
+    valid_to = DateTime[]
     old_value = Union{V, Nothing}[]
     new_value = Union{V, Nothing}[]
     kind = Symbol[]
@@ -90,7 +90,7 @@ uses, so a new backend only overrides it when concurrent `get_records` is safe.
 supports_parallel_reads(::BitemporalStore) = false
 
 # The as_of pick for one query: latest `tx_from` among records covering both.
-function _pick(recs, valid_at::Date, tx_at::DateTime)
+function _pick(recs, valid_at::DateTime, tx_at::DateTime)
     best = nothing
     for r in recs
         if r.tx_from <= tx_at < r.tx_to && r.valid_from <= valid_at < r.valid_to &&
@@ -116,17 +116,18 @@ scan.
 """
 function as_of_batch(
         s::BitemporalStore{K, V}, keys::Vector{K},
-        valid_ats::Vector{Date}, tx_ats::Vector{DateTime}; threaded::Bool = false,
+        valid_ats::Vector{<:TimeType}, tx_ats::Vector{DateTime}; threaded::Bool = false,
     ) where {K, V}
     n = length(keys)
     (length(valid_ats) == n && length(tx_ats) == n) ||
         throw(DimensionMismatch("keys, valid_ats, and tx_ats must have equal length"))
+    valid_dts = _instant.(valid_ats)
     if !threaded
-        return _batch_grouped(s, keys, valid_ats, tx_ats)
+        return _batch_grouped(s, keys, valid_dts, tx_ats)
     elseif supports_parallel_reads(s)
-        return _batch_flat(s, keys, valid_ats, tx_ats)
+        return _batch_flat(s, keys, valid_dts, tx_ats)
     else
-        return _batch_prefetch(s, keys, valid_ats, tx_ats)
+        return _batch_prefetch(s, keys, valid_dts, tx_ats)
     end
 end
 
