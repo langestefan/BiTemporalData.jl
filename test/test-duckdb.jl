@@ -10,13 +10,17 @@ end
     using DuckDB
     using Dates
 
+    # Fully release a DuckDB file: close the connection, then finalize the DB so
+    # the OS handle is freed (Windows refuses to reopen/delete a held file).
+    release(s) = (DBInterface.close!(s.db); finalize(s.db); GC.gc())
+
     mktempdir() do dir
         path = joinpath(dir, "store.duckdb")
 
         s = DuckDBStore{String, Float64}(path)
         insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1, 9))
         correct!(s, "A", 2.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 2, 9))
-        DBInterface.close!(s.db)
+        release(s)
 
         # Reopen the same file: data and the bitemporal history survive.
         s2 = DuckDBStore{String, Float64}(path)
@@ -26,7 +30,7 @@ end
         @test h.value == [1.0, 2.0]
         @test h.tx_to[1] == DateTime(2024, 1, 2, 9)
         @test h.tx_to[2] == MAX_DT
-        DBInterface.close!(s2.db)
+        release(s2)
     end
 end
 
