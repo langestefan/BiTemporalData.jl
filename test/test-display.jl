@@ -11,7 +11,7 @@
     @test occursin("2 entities", long)
     @test occursin("3 records", long)
     @test occursin("2 currently believed", long)   # the surviving "a" plus "b"
-    @test occursin("2024-01-01 to 2024-02-01", long)
+    @test occursin("2024-01-01T00:00:00 to 2024-02-01T00:00:00", long)
 
     @test sprint(show, s) == "MemoryStore{String, Float64}(2 entities, 3 records)"
 

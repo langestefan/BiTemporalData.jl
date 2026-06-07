@@ -14,7 +14,9 @@
         return s
     end
     ks = ["e$(mod1(i, 60))" for i in 1:500]   # includes "e51".."e60" (absent keys)
-    va = fill(Date(2024, 6, 1), 500)
+    # `va` is DateTime: the internal `_batch_*` helpers take already-normalized
+    # times (the public `as_of_batch` does the TimeType -> DateTime conversion).
+    va = fill(DateTime(2024, 6, 1), 500)
     ta = [iseven(i) ? DateTime(2024, 1, 1) : DateTime(2024, 1, 3) for i in 1:500]
 
     inmem = [

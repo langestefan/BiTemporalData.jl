@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning].
 - Add `as_of_batch(...; threaded = true)`, a backend-aware parallel batch read.
   In-memory backends thread over the queries; on-disk backends fetch serially and
   thread the scan. New backends opt in via `supports_parallel_reads`.
+- Valid time is now `DateTime` (was `Date`), so facts can change intraday.
+  Operations accept any `TimeType` (a `Date` is taken as midnight). A TimeZones
+  extension stores `ZonedDateTime` inputs as their UTC instant. `MAX_DATE` is
+  removed; use `MAX_DT` for both axes. (Breaking.)
 - Add `SQLiteStore`, a persistent backend shipped as a package extension (load it
   with `using SQLite`).
 - Add `DuckDBStore`, a persistent columnar backend shipped as a package extension

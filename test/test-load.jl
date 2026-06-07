@@ -32,12 +32,12 @@
     @test history(s, "A").value == [2.0, 3.0, 1.0]
     @test as_of(s, "B"; valid_at = Date(2024, 2, 1), tx_at = DateTime(2024, 1, 2)) == 9.0
 
-    # The valid_to default (MAX_DATE) leaves the range open-ended.
+    # The valid_to default (MAX_DT) leaves the range open-ended.
     open = load!(
         MemoryStore{String, Float64}(), [(k = "x", v = 5.0, d = Date(2024, 1, 1))];
         key = :k, value = :v, valid_from = :d, ts = r -> DateTime(2024, 1, 1),
     )
-    @test history(open, "x").valid_to == [MAX_DATE]
+    @test history(open, "x").valid_to == [MAX_DT]
 
     # Empty source is a no-op.
     @test isempty(entities(load!(MemoryStore{Int, Int}(), NamedTuple[]; key = :k, value = :v, valid_from = :f, ts = :t)))

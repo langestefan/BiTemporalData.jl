@@ -5,7 +5,7 @@ module BiTemporalDataSQLiteExt
 using SQLite: SQLite, DB
 using SQLite.DBInterface: execute, lastrowid
 using Serialization: serialize, deserialize
-using Dates: Dates, Date, DateTime
+using Dates: Dates, DateTime
 using BiTemporalData: SQLiteStore, Record, MAX_DT
 import BiTemporalData: get_records, put_record!, close_tx!, entities
 
@@ -13,8 +13,7 @@ import BiTemporalData: get_records, put_record!, close_tx!, entities
 _blob(x) = (io = IOBuffer(); serialize(io, x); take!(io))
 _unblob(b) = deserialize(IOBuffer(b))
 
-# Dates are stored as their integer `Dates.value` (exact, and indexable).
-_date(n) = Date(Dates.UTD(n))
+# All four times are `DateTime`, stored as their integer `Dates.value`.
 _dt(n) = DateTime(Dates.UTM(n))
 
 # --- constructors ---------------------------------------------------------
@@ -76,7 +75,7 @@ function get_records(s::SQLiteStore{K, V}, key) where {K, V}
             out,
             Record{V}(
                 row.id, _unblob(row.value),
-                _date(row.valid_from), _date(row.valid_to),
+                _dt(row.valid_from), _dt(row.valid_to),
                 _dt(row.tx_from), _dt(row.tx_to),
             ),
         )
