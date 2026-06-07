@@ -5,7 +5,7 @@ DocMeta.setdocmeta!(BiTemporalData, :DocTestSetup, :(using BiTemporalData); recu
 
 # Add titles of sections and overrides page titles
 const titles = Dict(
-    # "10-tutorials" => "Tutorials", # example folder title
+    "guides" => "Guides",   # the guides/ section folder
     "developer.md" => "Developer docs",
 )
 
@@ -54,6 +54,12 @@ end
 function list_pages()
     root_dir = joinpath(@__DIR__, "src")
     pages_list = recursively_list_pages(root_dir)
+
+    # Put the "Guides" section right after the home page; the rest stay alphabetical.
+    i = findfirst(p -> p isa Pair && first(p) == "Guides", pages_list)
+    if i !== nothing
+        pushfirst!(pages_list, popat!(pages_list, i))
+    end
 
     return ["index.md"; pages_list]
 end
