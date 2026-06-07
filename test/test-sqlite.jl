@@ -46,6 +46,14 @@ end
     @test eltype(entities(s)) == String
 end
 
+@testitem "SQLiteStore needs a path or connection" tags = [:unit] begin
+    using BiTemporalData
+    using SQLite
+
+    # No path/DB matches no extension constructor, so the core stub fires.
+    @test_throws ErrorException SQLiteStore{String, Float64}()
+end
+
 @testitem "ThreadSafe over SQLiteStore passes the semantic suite" tags = [:unit] setup = [SemanticSuite] begin
     using BiTemporalData
     using SQLite
