@@ -1,63 +1,116 @@
 # The bitemporal data model
 
-This guide explains the model BiTemporalData.jl is built on: two independent time
-axes, and how they let you answer "what did we believe was true, and when?"
+This guide teaches the model BiTemporalData.jl is built on by example. Every code
+block below runs when the docs are built, so the outputs are real.
 
-## Two kinds of time
-
-Every fact is tracked along two axes:
+The core idea: a fact is tracked along **two independent time axes**.
 
 - **Valid time** — when the fact is true *in the world*.
 - **Transaction time** — when the *system* believed it.
 
-These are genuinely different. Valid time is a property of the world (a price
-holds from a date, a sensor reads at an instant). Transaction time is a property
-of the database (a row was written, then later corrected). Keeping them apart is
-the whole point.
+Keeping them separate lets you tell two different kinds of change apart — the
+world changed vs. we changed our mind — and reproduce exactly what was known at
+any past moment. We'll build that up one operation at a time, tracking one
+person's salary.
 
-## Why two axes
+## A first fact
 
-One axis can't tell two different kinds of change apart:
+Make a store (`String` keys, `Float64` values), record a salary valid from the
+new year, and read it back. `ts` pins the transaction time so the example is
+reproducible; in real code you omit it and it defaults to `now()`.
 
-- **The world changed.** Yesterday's price was right; today there is a new one.
-- **We changed our mind.** Yesterday's price was *wrong*; we now know the correct
-  value for that same day.
+```@example salary
+using BiTemporalData, Dates
 
-With a single "last updated" timestamp both look identical — the old number is
-gone either way. Bitemporal storage records *both* axes, so you can reproduce
-exactly what the system believed at any past moment, and separate a real-world
-change from a correction.
+store = MemoryStore{String, Float64}()
+insert!(store, "alice", 100.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
 
-## A record is a rectangle
+as_of(store, "alice"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 2))
+```
 
-A stored [`Record`](@ref) covers a half-open box: `[valid_from, valid_to)` on the
-valid-time axis and `[tx_from, tx_to)` on the transaction-time axis. Writes are
-**append-only** — the only field that ever changes is `tx_to`, which is closed
-when a later write supersedes the record. A record whose `tx_to` is still open
-(`MAX_DT`) is *currently believed*.
+[`as_of`](@ref) asks a single question: *what did we believe at `tx_at` was true
+on `valid_at`?*
 
-A query picks one point on each axis (`valid_at`, `tx_at`) and returns the record
-whose box contains that point.
+## "We were wrong": correcting along transaction time
 
-## The three writes
+The 100 was a typo — the real figure is 110. [`correct!`](@ref) supersedes it.
+The old record is **not deleted**; it is closed in transaction time, so an earlier
+`tx_at` still reproduces the old belief.
 
-- [`insert!`](@ref) — record a new fact over a valid range.
-- [`correct!`](@ref) — "we were wrong": supersede a value. The old record is
-  closed in transaction time, not deleted, so earlier beliefs stay reproducible.
-- [`amend!`](@ref) — "the world changed on a date": split the valid-time timeline,
-  keeping the old value before the change and the new value after.
+```@example salary
+correct!(store, "alice", 110.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 3))
 
-`correct!` moves along the transaction axis; `amend!` moves along the valid axis.
-That distinction is the model in one sentence.
+(
+    believed_before = as_of(store, "alice"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 2)),
+    believed_now = as_of(store, "alice"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 4)),
+)
+```
 
-## Reading the store
+Same `valid_at`, different `tx_at`, different answer: a correction moves along the
+**transaction** axis.
 
-- [`as_of`](@ref) answers a single `(valid_at, tx_at)` point.
-- [`snapshot`](@ref) freezes the whole store at one `tx_at` — the reproducible,
-  leakage-proof read boundary for analytics and ML.
+## "The world changed": amending along valid time
+
+Alice gets a raise to 130, effective 1 July — the old figure was *right* for the
+first half of the year. [`amend!`](@ref) splits the timeline: the old value holds
+before the effective date, the new value after.
+
+```@example salary
+amend!(store, "alice", 130.0; effective = Date(2024, 7, 1), ts = DateTime(2024, 8, 1))
+
+(
+    spring = as_of(store, "alice"; valid_at = Date(2024, 3, 1), tx_at = DateTime(2024, 8, 2)),
+    autumn = as_of(store, "alice"; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2)),
+)
+```
+
+Same `tx_at`, different `valid_at`, different answer: an amendment moves along the
+**valid** axis. That contrast — `correct!` on transaction time, `amend!` on valid
+time — is the whole model.
+
+## The full history
+
+Nothing was overwritten. [`history`](@ref) returns every record ever written for a
+key, including the superseded ones, as a column table. Only `tx_to` ever changes
+(it closes when a record is superseded); everything else is append-only.
+
+```@example salary
+history(store, "alice")
+```
+
+A record is "currently believed" when its `tx_to` is still open (the `MAX_DT`
+sentinel).
+
+## Reading the whole store: snapshot
+
+For analytics and ML you don't query record by record — you freeze the store at a
+`tx_at` with [`snapshot`](@ref). With a `valid_at`, it collapses to one value per
+entity. Freezing `tx_at` makes the result reproducible and free of look-ahead
+leakage.
+
+```@example salary
+snapshot(store; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2))
+```
+
+## Sub-day valid time
+
+Valid time is a `DateTime`, so a fact can change intraday — a `Date` is just taken
+as midnight. Here a sensor reading becomes valid at 12:30:
+
+```@example salary
+insert!(store, "sensor", 21.5; valid_from = DateTime(2024, 1, 1, 12, 30), ts = DateTime(2024, 1, 1))
+
+(
+    at_13_00 = as_of(store, "sensor"; valid_at = DateTime(2024, 1, 1, 13), tx_at = DateTime(2024, 2, 1)),
+    at_12_00 = as_of(store, "sensor"; valid_at = DateTime(2024, 1, 1, 12), tx_at = DateTime(2024, 2, 1)),
+)
+```
+
+With `using TimeZones`, a `ZonedDateTime` works too — it is stored as its UTC
+instant, so times given in different zones still compare correctly.
 
 ## Where to next
 
-- The [Reference](@ref reference) lists every operation and type.
-- The package README has a runnable quick-start walking through `insert!`,
-  `correct!`, `amend!`, and `snapshot`.
+- The [Reference](@ref reference) documents every operation and type.
+- `snapshot` is the read boundary for bulk/ML workloads; `ColumnarStore` and the
+  `SQLiteStore`/`DuckDBStore` extensions back it with different storage.
