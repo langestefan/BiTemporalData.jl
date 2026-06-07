@@ -1,6 +1,6 @@
 module BiTemporalData
 
-using Base.Threads: @threads, nthreads
+using Base.Threads: @threads
 using Dates: Date, DateTime, now, today
 using Tables: getcolumn, rows
 

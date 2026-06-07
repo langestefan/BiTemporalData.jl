@@ -115,7 +115,7 @@ function as_of_batch(
     (length(valid_ats) == n && length(tx_ats) == n) ||
         throw(DimensionMismatch("keys, valid_ats, and tx_ats must have equal length"))
     result = Vector{Union{V, Nothing}}(undef, n)
-    if threaded && nthreads() > 1
+    if threaded
         @threads for i in eachindex(keys)
             result[i] = _value_at(s, keys[i], valid_ats[i], tx_ats[i])
         end

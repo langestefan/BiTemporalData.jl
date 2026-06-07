@@ -109,10 +109,11 @@ Vectorised [`as_of`](@ref): position `i` holds the value believed at `tx_ats[i]`
 to hold at `valid_ats[i]` for `keys[i]`, or `nothing`. Fetches each key's records
 once instead of per call.
 
-With `threaded = true` (and `Threads.nthreads() > 1`) the batch is split across
-threads, picking a strategy from [`supports_parallel_reads`](@ref): backends with
-parallel reads fetch one query per thread; the others fetch records serially (one
-per distinct key, connection-safe) and thread only the per-query scan.
+With `threaded = true` the batch is split across threads (running serially when
+only one is available), picking a strategy from [`supports_parallel_reads`](@ref):
+backends with parallel reads fetch one query per thread; the others fetch records
+serially (one per distinct key, connection-safe) and thread only the per-query
+scan.
 """
 function as_of_batch(
         s::BitemporalStore{K, V}, keys::Vector{K},
@@ -121,7 +122,7 @@ function as_of_batch(
     n = length(keys)
     (length(valid_ats) == n && length(tx_ats) == n) ||
         throw(DimensionMismatch("keys, valid_ats, and tx_ats must have equal length"))
-    if !threaded || nthreads() == 1
+    if !threaded
         return _batch_grouped(s, keys, valid_ats, tx_ats)
     elseif supports_parallel_reads(s)
         return _batch_flat(s, keys, valid_ats, tx_ats)
