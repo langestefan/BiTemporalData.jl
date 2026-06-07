@@ -38,18 +38,20 @@ Representative result, 1,000,000-query batch over 2000 entities, 16 threads:
 
 | Backend           | reads    | serial   | threaded | speedup |
 | ----------------- | -------- | -------- | -------- | ------- |
-| `MemoryStore`     | parallel | 159 ms   | 15 ms    | **10×** |
-| `ColumnarStore`   | parallel | 149 ms   | 48 ms    | 3.1×    |
-| `ThreadSafe(Col)` | serial   | 155 ms   | 51 ms    | 3.0×    |
-| `SQLiteStore`     | serial   | 165 ms   | 82 ms    | 2.0×    |
-| `DuckDBStore`     | serial   | 3.3 s    | 3.8 s    | ~1×     |
+| `ColumnarStore`   | parallel | 61 ms    | **8 ms** | 7.4×    |
+| `MemoryStore`     | parallel | 125 ms   | 11 ms    | 11.5×   |
+| `ThreadSafe(Col)` | serial   | 127 ms   | 50 ms    | 2.5×    |
+| `SQLiteStore`     | serial   | 156 ms   | 82 ms    | 1.9×    |
+| `DuckDBStore`     | serial   | 3.0 s    | 2.4 s    | ~1×     |
 
 Findings:
 
-- **In-memory backends win big.** `MemoryStore` scales best (~10×) because its
-  `get_records` hands back the stored vector with no allocation; `ColumnarStore`
-  rebuilds a record vector per call, so its flat path is allocation-bound (~3×).
-  (`ColumnarStore`'s strength is `snapshot`, not per-key `get_records`.)
+- **`ColumnarStore` is fastest, serial and threaded.** It overrides `as_of` /
+  `as_of_batch` to scan the column vectors by index, never building a `Record`, so
+  the batch read is allocation-free (just the result vector). That makes its serial
+  path ~2× faster than `MemoryStore` (no grouping `Dict`, no record materialization)
+  and its threaded path the quickest overall. `MemoryStore` shows a larger *ratio*
+  only because its serial baseline allocates the grouping it then parallelizes away.
 - **On-disk backends** thread only the scan, so the speedup grows with batch size
   (more scan work) up to ~2×; the per-key SQL fetch is the serial floor and isn't
   parallelized (a single connection isn't thread-safe). `DuckDBStore`'s fetch is

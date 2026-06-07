@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning].
 - Add `load!` to bulk-ingest a Tables.jl source (e.g. a `DataFrame` or `CSV.File`)
   into a store, mapping columns to `key`/`value`/`valid_from`/`valid_to`/`ts`.
 - Add a readable `show` for any `BitemporalStore` (summary instead of a full dump).
-- Add `ColumnarStore`, an in-memory struct-of-arrays backend with a native
-  `snapshot` (~7-24x faster than `MemoryStore` for the read path; see `bench/`).
+- Add `ColumnarStore`, an in-memory struct-of-arrays backend with native
+  `snapshot`/`as_of`/`as_of_batch` that scan the columns directly without building
+  `Record`s (the fastest backend for the read path; see `bench/`).
 - Add `as_of_batch(...; threaded = true)`, a backend-aware parallel batch read.
   In-memory backends thread over the queries; on-disk backends fetch serially and
   thread the scan. New backends opt in via `supports_parallel_reads`.

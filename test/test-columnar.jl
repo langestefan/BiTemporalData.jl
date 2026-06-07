@@ -45,6 +45,35 @@ end
     @test eltype(collect(entities(s))) == String
 end
 
+@testitem "ColumnarStore native as_of / as_of_batch match MemoryStore" tags = [:unit] begin
+    using BiTemporalData
+    using Dates
+
+    # ColumnarStore overrides `as_of`/`as_of_batch` to scan columns directly; check
+    # those native paths against the generic `MemoryStore` ones on the same data.
+    function build(make)
+        s = make()
+        for i in 1:40
+            k = "e$i"
+            insert!(s, k, float(i); valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+            correct!(s, k, float(i) + 0.5; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 2))
+        end
+        return s
+    end
+    mem = build(() -> MemoryStore{String, Float64}())
+    col = build(() -> ColumnarStore{String, Float64}())
+
+    ks = ["e$(mod1(i, 45))" for i in 1:200]   # includes absent keys "e41".."e45"
+    va = fill(Date(2024, 6, 1), 200)
+    ta = [iseven(i) ? DateTime(2024, 1, 1) : DateTime(2024, 1, 3) for i in 1:200]
+
+    @test [as_of(col, ks[i]; valid_at = va[i], tx_at = ta[i]) for i in eachindex(ks)] ==
+        [as_of(mem, ks[i]; valid_at = va[i], tx_at = ta[i]) for i in eachindex(ks)]
+    @test as_of_batch(col, ks, va, ta) == as_of_batch(mem, ks, va, ta)
+    @test as_of_batch(col, ks, va, ta; threaded = true) == as_of_batch(mem, ks, va, ta)
+    @test as_of(col, "absent") === nothing
+end
+
 @testitem "ThreadSafe over ColumnarStore passes the semantic suite" tags = [:unit] setup = [SemanticSuite] begin
     using BiTemporalData
 

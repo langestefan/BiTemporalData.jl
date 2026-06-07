@@ -37,6 +37,21 @@ function get_records(s::ColumnarStore{K, V}, key) where {K, V}
     return Record{V}[_row(s, i) for i in rows]
 end
 
+# The believed value for `key` at `(valid_at, tx_at)`, read straight from the
+# columns by row index: no `Record` is materialized. Returns `nothing` if absent.
+function _value_at(s::ColumnarStore{K, V}, key, valid_at::Date, tx_at::DateTime) where {K, V}
+    rows = get(s.index, key, nothing)
+    rows === nothing && return nothing
+    best = 0
+    for i in rows
+        if s.tx_from[i] <= tx_at < s.tx_to[i] && s.valid_from[i] <= valid_at < s.valid_to[i] &&
+                (best == 0 || s.tx_from[i] > s.tx_from[best])
+            best = i
+        end
+    end
+    return best == 0 ? nothing : s.value[best]
+end
+
 function put_record!(s::ColumnarStore{K, V}, key, r::Record{V}) where {K, V}
     push!(s.key, key)             # `Vector{K}` / `Dict{K,…}` normalize the key type
     push!(s.value, r.value)
@@ -75,17 +90,39 @@ function snapshot(
     else
         ent = K[]
         val = V[]
-        for (key, rows) in s.index
-            best = 0
-            for i in rows
-                if s.tx_from[i] <= tx_at < s.tx_to[i] &&
-                        s.valid_from[i] <= valid_at < s.valid_to[i] &&
-                        (best == 0 || s.tx_from[i] > s.tx_from[best])
-                    best = i
-                end
-            end
-            best != 0 && (push!(ent, key); push!(val, s.value[best]))
+        for key in keys(s.index)
+            v = _value_at(s, key, valid_at, tx_at)
+            v === nothing || (push!(ent, key); push!(val, v))
         end
         return (entity = ent, value = val)
     end
+end
+
+# Native reads that skip `get_records` entirely: scan the columns by index, never
+# building a `Record`. Allocation-free, so the batch path threads cleanly.
+function as_of(
+        s::ColumnarStore{K, V}, key;
+        valid_at::Date = today(), tx_at::DateTime = now(),
+    ) where {K, V}
+    return _value_at(s, key, valid_at, tx_at)
+end
+
+function as_of_batch(
+        s::ColumnarStore{K, V}, keys::Vector{K},
+        valid_ats::Vector{Date}, tx_ats::Vector{DateTime}; threaded::Bool = false,
+    ) where {K, V}
+    n = length(keys)
+    (length(valid_ats) == n && length(tx_ats) == n) ||
+        throw(DimensionMismatch("keys, valid_ats, and tx_ats must have equal length"))
+    result = Vector{Union{V, Nothing}}(undef, n)
+    if threaded && nthreads() > 1
+        @threads for i in eachindex(keys)
+            result[i] = _value_at(s, keys[i], valid_ats[i], tx_ats[i])
+        end
+    else
+        for i in eachindex(keys)
+            result[i] = _value_at(s, keys[i], valid_ats[i], tx_ats[i])
+        end
+    end
+    return result
 end
