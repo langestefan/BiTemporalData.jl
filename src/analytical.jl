@@ -89,8 +89,7 @@ uses, so a new backend only overrides it when concurrent `get_records` is safe.
 """
 supports_parallel_reads(::BitemporalStore) = false
 
-# The believed value for one query, scanned from a key's records (the `as_of`
-# pick: latest `tx_from` among records covering both `tx_at` and `valid_at`).
+# The as_of pick for one query: latest `tx_from` among records covering both.
 function _pick(recs, valid_at::Date, tx_at::DateTime)
     best = nothing
     for r in recs
@@ -131,7 +130,7 @@ function as_of_batch(
     end
 end
 
-# Serial: one `get_records` per distinct key, then scan that key's queries.
+# One `get_records` per distinct key, then scan its queries.
 function _batch_grouped(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K, V}
     result = Vector{Union{V, Nothing}}(undef, length(keys))
     bykey = Dict{K, Vector{Int}}()
@@ -147,8 +146,7 @@ function _batch_grouped(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where
     return result
 end
 
-# Parallel reads: thread straight over the queries (no serial grouping step).
-# Only valid when `get_records` is cheap and concurrency-safe.
+# Thread over the queries. Only safe when `get_records` is cheap and thread-safe.
 function _batch_flat(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K, V}
     result = Vector{Union{V, Nothing}}(undef, length(keys))
     @threads for i in eachindex(keys)
@@ -157,8 +155,7 @@ function _batch_flat(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K
     return result
 end
 
-# Serial connection-safe fetch (one `get_records` per distinct key) into a cache,
-# then a parallel scan that only touches the cache, never the store.
+# Fetch serially (safe on one connection), then thread the scan over the cache.
 function _batch_prefetch(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K, V}
     result = Vector{Union{V, Nothing}}(undef, length(keys))
     cache = Dict{K, Vector{Record{V}}}()

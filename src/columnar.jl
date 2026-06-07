@@ -37,8 +37,7 @@ function get_records(s::ColumnarStore{K, V}, key) where {K, V}
     return Record{V}[_row(s, i) for i in rows]
 end
 
-# The believed value for `key` at `(valid_at, tx_at)`, read straight from the
-# columns by row index: no `Record` is materialized. Returns `nothing` if absent.
+# The as_of value for `key`, read from the columns. `nothing` if absent.
 function _value_at(s::ColumnarStore{K, V}, key, valid_at::Date, tx_at::DateTime) where {K, V}
     rows = get(s.index, key, nothing)
     rows === nothing && return nothing
@@ -73,8 +72,7 @@ entities(s::ColumnarStore) = keys(s.index)
 
 supports_parallel_reads(::ColumnarStore) = true
 
-# Native snapshot: one linear scan over the columns; the `value` column is built
-# contiguously without rebuilding any `Record`.
+# One pass over the columns, so `value` comes out contiguous.
 function snapshot(
         s::ColumnarStore{K, V};
         valid_at::Union{Date, Nothing} = nothing, tx_at::DateTime = now(),
@@ -98,8 +96,7 @@ function snapshot(
     end
 end
 
-# Native reads that skip `get_records` entirely: scan the columns by index, never
-# building a `Record`. Allocation-free, so the batch path threads cleanly.
+# as_of/as_of_batch read the columns directly to skip building Records.
 function as_of(
         s::ColumnarStore{K, V}, key;
         valid_at::Date = today(), tx_at::DateTime = now(),
