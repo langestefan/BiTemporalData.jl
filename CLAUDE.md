@@ -25,7 +25,9 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 - `defaults.jl`: `insert!` (extends `Base.insert!`), `correct!`, `amend!`,
   `as_of`, `history`, and `load!` (bulk-ingest a Tables.jl source via `correct!`).
 - `snapshot.jl`: `snapshot`.
-- `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built on `snapshot`/`get_records`.
+- `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built
+  on `snapshot`/`get_records`. `as_of_batch` has a `threaded=true` mode whose strategy
+  is gated by the `supports_parallel_reads` trait (see Architecture).
 - `memory.jl`: `MemoryStore` and its four primitive methods.
 - `columnar.jl`: `ColumnarStore`, an in-memory **struct-of-arrays** backend (each
   record field is a column vector, plus a per-key row index). Same semantics as
@@ -61,6 +63,12 @@ The design separates an **abstract store interface** from concrete backends:
   `history`, `snapshot`) are **default methods on the abstract type** built from
   those primitives, so every backend gets them for free and may override any one
   with a faster native path.
+- A backend may also override the `supports_parallel_reads(store)` trait (default
+  `false`) to opt into the threaded `as_of_batch` read strategy: `true` means
+  concurrent `get_records` is cheap and thread-safe, so queries thread one-per-thread;
+  `false` prefetches each key's records serially (connection-safe) and threads only
+  the per-query scan. In-memory backends (`MemoryStore`, `ColumnarStore`) return
+  `true`; the single-connection backends (`SQLiteStore`, `DuckDBStore`) keep `false`.
 - `MemoryStore` is the reference backend and the contract reference for the
   semantic test suite.
 - `SQLiteStore` is a persistent backend shipped as a **package extension**
