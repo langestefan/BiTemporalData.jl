@@ -20,4 +20,4 @@ jobs:
           # weakdep backends the suite exercises, plus the stdlibs it uses
           # (benchpkg builds its own env and does not read bench/Project.toml)
           extra-pkgs: "SQLite,DuckDB,Dates,Random"
-          force-time-unit: "us"
+          force-time-unit: "ms"
