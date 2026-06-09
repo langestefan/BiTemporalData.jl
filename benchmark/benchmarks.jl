@@ -35,6 +35,7 @@ const VALID_FROM = Date(2024, 1, 1)
 const READ_VALID = Date(2024, 6, 1)
 
 # Each entity gets an insert plus two corrections (3 records, one believed now).
+# (Trivial edit on a throwaway branch to give the test PR a diff. DO NOT MERGE.)
 function build!(s)
     for i in 1:N
         k = "e$i"
