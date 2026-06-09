@@ -31,7 +31,7 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
   record field is a column vector, plus a per-key row index). Same semantics as
   `MemoryStore` but overrides `snapshot` with a single linear pass that builds the
   `value` column contiguously: the fast read path for ML/bulk workloads
-  (~7–24× faster than `MemoryStore`, benchmarked in `bench/`).
+  (~7–24× faster than `MemoryStore`, benchmarked in `benchmark/`).
 - `sqlite.jl`: the `SQLiteStore` struct (DB handle as a type parameter) plus a
   catch-all error constructor; the real constructors and the four primitive
   methods live in `ext/BiTemporalDataSQLiteExt.jl` (loaded by `using SQLite`;
@@ -128,10 +128,11 @@ julia --project=docs docs/make.jl
 julia --project=docs -e 'using LiveServer; servedocs()'
 ```
 
-The `[workspace]` in `Project.toml` declares `test` and `docs` as sub-projects,
-each with its own `Project.toml`. The `examples/` directory is a self-contained
-runnable demo with its own environment (`julia --project=examples
-examples/weather_bitemporal.jl`); it is not part of the workspace.
+The `[workspace]` in `Project.toml` declares `test`, `docs`, `benchmark`, and
+`examples` as sub-projects, each with its own `Project.toml` (and `[sources]`
+pointing the package at `..`) but sharing the root `Manifest.toml`. Run a
+sub-project by activating it, e.g. the examples demo with `julia
+--project=examples examples/weather_bitemporal.jl`.
 
 To run a single test item interactively, open Julia with `--project=.`, `using
 TestItemRunner`, and use `@run_package_tests filter=...` to select by name or tag.

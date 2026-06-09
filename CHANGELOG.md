@@ -13,10 +13,13 @@ and this project adheres to [Semantic Versioning].
 - Add a readable `show` for any `BitemporalStore` (summary instead of a full dump).
 - Add `ColumnarStore`, an in-memory struct-of-arrays backend with native
   `snapshot`/`as_of`/`as_of_batch` that scan the columns directly without building
-  `Record`s (the fastest backend for the read path; see `bench/`).
+  `Record`s (the fastest backend for the read path; see `benchmark/`).
 - Add `as_of_batch(...; threaded = true)`, a backend-aware parallel batch read.
   In-memory backends thread over the queries; on-disk backends fetch serially and
   thread the scan. New backends opt in via `supports_parallel_reads`.
+- Add a `Benchmark PR` workflow that runs the `benchmark/benchmarks.jl`
+  AirspeedVelocity.jl suite to compare each PR against `main` and comment the
+  result. `benchmark` and `examples` are now `[workspace]` sub-projects.
 - Valid time is now `DateTime` (was `Date`), so facts can change intraday.
   Operations accept any `TimeType` (a `Date` is taken as midnight). A TimeZones
   extension stores `ZonedDateTime` inputs as their UTC instant. `MAX_DATE` is

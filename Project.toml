@@ -19,7 +19,7 @@ BiTemporalDataSQLiteExt = ["SQLite", "Serialization"]
 BiTemporalDataTimeZonesExt = "TimeZones"
 
 [workspace]
-projects = ["test", "docs"]
+projects = ["test", "docs", "benchmark", "examples"]
 
 [compat]
 Dates = "1.10"

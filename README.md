@@ -44,7 +44,7 @@ The persistent backends load when you add their package:
 
 `ColumnarStore` lays records out as parallel column vectors, so a `snapshot`'s
 `value` column is a contiguous `Vector{V}` built in one pass: ~7–24× faster than
-`MemoryStore` for the snapshot read path (see `bench/`).
+`MemoryStore` for the snapshot read path (see `benchmark/`).
 
 ## Installation
 
