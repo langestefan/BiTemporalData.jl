@@ -1,7 +1,7 @@
 name: Benchmark PR
 on:
   pull_request_target:
-    branches: [main]
+    branches: [main, bench-ci-test-base]
 permissions:
   pull-requests: write # needed to post the comparison comment
 
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        julia-version: ["lts", "1"]
+        julia-version: ["1"]
     steps:
       - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
         with:
