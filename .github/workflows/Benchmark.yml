@@ -1,6 +1,6 @@
 name: Benchmark PR
 on:
-  pull_request_target:
+  pull_request: # TEST ONLY: pull_request (not _target) runs the head's workflow
     branches: [main, bench-ci-test-base]
 permissions:
   pull-requests: write # needed to post the comparison comment
