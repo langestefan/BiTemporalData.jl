@@ -25,13 +25,15 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 - `defaults.jl`: `insert!` (extends `Base.insert!`), `correct!`, `amend!`,
   `as_of`, `history`, and `load!` (bulk-ingest a Tables.jl source via `correct!`).
 - `snapshot.jl`: `snapshot`.
-- `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built on `snapshot`/`get_records`.
+- `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built
+  on `snapshot`/`get_records`. `as_of_batch` has a `threaded=true` mode whose strategy
+  is gated by the `supports_parallel_reads` trait (see Architecture).
 - `memory.jl`: `MemoryStore` and its four primitive methods.
 - `columnar.jl`: `ColumnarStore`, an in-memory **struct-of-arrays** backend (each
   record field is a column vector, plus a per-key row index). Same semantics as
   `MemoryStore` but overrides `snapshot` with a single linear pass that builds the
   `value` column contiguously: the fast read path for ML/bulk workloads
-  (~7–24× faster than `MemoryStore`, benchmarked in `bench/`).
+  (~7–24× faster than `MemoryStore`, benchmarked in `benchmark/`).
 - `sqlite.jl`: the `SQLiteStore` struct (DB handle as a type parameter) plus a
   catch-all error constructor; the real constructors and the four primitive
   methods live in `ext/BiTemporalDataSQLiteExt.jl` (loaded by `using SQLite`;
@@ -61,6 +63,12 @@ The design separates an **abstract store interface** from concrete backends:
   `history`, `snapshot`) are **default methods on the abstract type** built from
   those primitives, so every backend gets them for free and may override any one
   with a faster native path.
+- A backend may also override the `supports_parallel_reads(store)` trait (default
+  `false`) to opt into the threaded `as_of_batch` read strategy: `true` means
+  concurrent `get_records` is cheap and thread-safe, so queries thread one-per-thread;
+  `false` prefetches each key's records serially (connection-safe) and threads only
+  the per-query scan. In-memory backends (`MemoryStore`, `ColumnarStore`) return
+  `true`; the single-connection backends (`SQLiteStore`, `DuckDBStore`) keep `false`.
 - `MemoryStore` is the reference backend and the contract reference for the
   semantic test suite.
 - `SQLiteStore` is a persistent backend shipped as a **package extension**
@@ -128,10 +136,11 @@ julia --project=docs docs/make.jl
 julia --project=docs -e 'using LiveServer; servedocs()'
 ```
 
-The `[workspace]` in `Project.toml` declares `test` and `docs` as sub-projects,
-each with its own `Project.toml`. The `examples/` directory is a self-contained
-runnable demo with its own environment (`julia --project=examples
-examples/weather_bitemporal.jl`); it is not part of the workspace.
+The `[workspace]` in `Project.toml` declares `test`, `docs`, `benchmark`, and
+`examples` as sub-projects, each with its own `Project.toml` (and `[sources]`
+pointing the package at `..`) but sharing the root `Manifest.toml`. Run a
+sub-project by activating it, e.g. the examples demo with `julia
+--project=examples examples/weather_bitemporal.jl`.
 
 To run a single test item interactively, open Julia with `--project=.`, `using
 TestItemRunner`, and use `@run_package_tests filter=...` to select by name or tag.

@@ -1,0 +1,23 @@
+name: Benchmark PR
+on:
+  pull_request_target:
+    branches: [main]
+permissions:
+  pull-requests: write # needed to post the comparison comment
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        julia-version: ["lts", "1"]
+    steps:
+      - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
+        with:
+          julia-version: ${{ matrix.julia-version }}
+          script: "benchmark/benchmarks.jl"
+          exeflags: "--threads=auto" # the as_of_batch threaded path uses all threads
+          # weakdep backends the suite exercises, plus the stdlibs it uses
+          # (benchpkg builds its own env and does not read bench/Project.toml)
+          extra-pkgs: "SQLite,DuckDB,Dates,Random"
+          force-time-unit: "us"
