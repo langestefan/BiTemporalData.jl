@@ -1,14 +1,11 @@
-# `ThreadSafe` wraps any backend with a store-wide lock. On Julia >= 1.11 the
-# store is held in a `Base.Lockable`, so the inner store is only reachable while
-# the lock is held (`lock(f, lockable)` runs `f(value)` under the lock); on 1.10
-# we keep the equivalent `(store, lock)` pair. The difference is confined to the
-# struct and the internal `_locked` helper; every method below is written once.
+# On Julia >= 1.11 the store is held in a `Base.Lockable` (reachable only while
+# locked); on 1.10 we keep an equivalent `(store, lock)` pair. Only the struct
+# and the `_locked` helper differ by version; every method below is written once.
 @static if VERSION >= v"1.11"
     struct ThreadSafe{K, V, S <: BitemporalStore{K, V}} <: BitemporalStore{K, V}
         lockable::Base.Lockable{S, ReentrantLock}
     end
-    ThreadSafe(store::BitemporalStore{K, V}) where {K, V} =
-        ThreadSafe{K, V, typeof(store)}(Base.Lockable(store, ReentrantLock()))
+    ThreadSafe(store::BitemporalStore{K, V}) where {K, V} = ThreadSafe{K, V, typeof(store)}(Base.Lockable(store, ReentrantLock()))
     # Run `f(inner_store)` while holding the lock.
     _locked(f, t::ThreadSafe) = lock(f, t.lockable)
 else
@@ -16,8 +13,7 @@ else
         store::S
         lock::ReentrantLock
     end
-    ThreadSafe(store::BitemporalStore{K, V}) where {K, V} =
-        ThreadSafe{K, V, typeof(store)}(store, ReentrantLock())
+    ThreadSafe(store::BitemporalStore{K, V}) where {K, V} = ThreadSafe{K, V, typeof(store)}(store, ReentrantLock())
     # Run `f(inner_store)` while holding the lock.
     _locked(f, t::ThreadSafe) = lock(() -> f(t.store), t.lock)
 end
@@ -81,8 +77,5 @@ put_record!(t::ThreadSafe, key, r) = _locked(s -> put_record!(s, key, r), t)
 close_tx!(t::ThreadSafe, id, ts) = _locked(s -> close_tx!(s, id, ts), t)
 entities(t::ThreadSafe) = _locked(s -> entities(s), t)
 
-# Forward the transaction hook through the lock. Re-taking the lock here is safe
-# and cheap (ReentrantLock is reentrant); this is only reached when a caller
-# invokes with_write_tx on the wrapper directly, since our own operations call
-# the inner store's with_write_tx.
+# Re-taking the lock here is safe and cheap (ReentrantLock is reentrant).
 with_write_tx(f, t::ThreadSafe) = _locked(s -> with_write_tx(f, s), t)

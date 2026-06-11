@@ -21,9 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Test both the LTS (currently 1.10) and the latest release, so
-        # version-gated code paths (e.g. the Julia 1.11+ Base.Lockable backing of
-        # ThreadSafe) are exercised and reported to Codecov on every PR.
+        # LTS + latest, so version-gated code is tested and covered on every PR.
         version: ["lts", "1"]
     uses: ./.github/workflows/ReusableTest.yml
     with:
