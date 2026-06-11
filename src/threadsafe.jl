@@ -3,8 +3,13 @@
 
 Wrap any [`BitemporalStore`](@ref) with a single store-wide `ReentrantLock`.
 Each operation locks once and runs its full primitive sequence atomically, so
-multi-primitive writes (`correct!`, `amend!`) cannot interleave. This is safety,
-not concurrency: one operation runs at a time, store-wide.
+multi-primitive writes (`correct!`, `amend!`, `retract!`) and compound reads
+(`as_of_batch`, `diff`, `load!`) cannot interleave with a concurrent writer.
+This is safety, not concurrency: one operation runs at a time, store-wide.
+
+[`asof_join`](@ref) reads two stores and is not wrapped (locking two stores
+needs an ordering protocol), so a join across concurrently-written stores is not
+a single atomic read.
 """
 struct ThreadSafe{K, V, S <: BitemporalStore{K, V}} <: BitemporalStore{K, V}
     store::S
@@ -26,6 +31,22 @@ retract!(t::ThreadSafe, key; kw...) =
 as_of(t::ThreadSafe, key; kw...) = lock(() -> as_of(t.store, key; kw...), t.lock)
 history(t::ThreadSafe, key) = lock(() -> history(t.store, key), t.lock)
 snapshot(t::ThreadSafe; kw...) = lock(() -> snapshot(t.store; kw...), t.lock)
+load!(t::ThreadSafe, table; kw...) = lock(() -> load!(t.store, table; kw...), t.lock)
+
+# Compound reads run wholly under the lock, so they are a single consistent
+# point-in-time read against concurrent writers. Threading the inner batch would
+# not help (the lock already serializes), so force the serial path.
+function as_of_batch(
+        t::ThreadSafe{K, V}, keys::Vector{K},
+        valid_ats::Vector{<:TimeType}, tx_ats::Vector{DateTime}; threaded::Bool = false,
+    ) where {K, V}
+    return lock(() -> as_of_batch(t.store, keys, valid_ats, tx_ats; threaded = false), t.lock)
+end
+Base.diff(t::ThreadSafe; kw...) = lock(() -> diff(t.store; kw...), t.lock)
+
+# A wrapped store never threads its own reads: one operation runs at a time,
+# store-wide, so concurrent get_records never happens (make it explicit).
+supports_parallel_reads(::ThreadSafe) = false
 
 # Primitives forwarded so the wrapper fully implements the interface. Operations
 # above call `t.store` directly, so they never route through these.
