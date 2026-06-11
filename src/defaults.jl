@@ -23,11 +23,45 @@ function Base.insert!(
     return put_record!(s, key, Record{V}(nothing, value, vf, vt, ts, MAX_DT))
 end
 
+# Shared close path for `correct!`/`retract!`: close every believed record
+# overlapping `[vf, vt)` at `ts`, re-inserting the preserved slivers (the parts
+# of a partially-overlapped record that fall outside `[vf, vt)`) with the old
+# value. Returns the re-inserted sliver records. Validates tx ordering up front
+# (T5) so a rejected `ts` leaves the store untouched, even on a backend with no
+# rollback.
+function _close_range!(
+        s::BitemporalStore{K, V}, key, vf::DateTime, vt::DateTime, ts::DateTime,
+    ) where {K, V}
+    overlapping = filter(get_records(s, key)) do r
+        _believed(r) && _overlaps(r.valid_from, r.valid_to, vf, vt)
+    end
+    for r in overlapping
+        ts >= r.tx_from || throw(
+            ArgumentError(
+                "ts ($ts) predates the record's tx_from ($(r.tx_from)); transaction time is append-only",
+            ),
+        )
+    end
+    slivers = Record{V}[]
+    for r in overlapping
+        close_tx!(s, r.id, ts)
+        r.valid_from < vf &&
+            push!(slivers, put_record!(s, key, Record{V}(nothing, r.value, r.valid_from, vf, ts, MAX_DT)))
+        vt < r.valid_to &&
+            push!(slivers, put_record!(s, key, Record{V}(nothing, r.value, vt, r.valid_to, ts, MAX_DT)))
+    end
+    return slivers
+end
+
 """
     correct!(s, key, value; valid_from, valid_to = MAX_DT, ts = now(UTC))
 
 "We were wrong." Close every believed record overlapping the range, then append
-the corrected `value`. History stays readable via [`as_of`](@ref) at an earlier `tx_at`.
+the corrected `value`. A record only partially overlapped keeps its surrounding
+belief: the slivers outside `[valid_from, valid_to)` are re-inserted with the old
+value, so correcting a subrange never silently retracts the rest. History stays
+readable via [`as_of`](@ref) at an earlier `tx_at`. Returns the stored corrected
+[`Record`](@ref).
 """
 function correct!(
         s::BitemporalStore{K, V}, key, value;
@@ -35,12 +69,31 @@ function correct!(
     ) where {K, V}
     vf, vt = _instant(valid_from), _instant(valid_to)
     _check_range(vf, vt)
-    for r in get_records(s, key)
-        if _believed(r) && _overlaps(r.valid_from, r.valid_to, vf, vt)
-            close_tx!(s, r.id, ts)
-        end
+    return with_write_tx(s) do
+        _close_range!(s, key, vf, vt, ts)
+        put_record!(s, key, Record{V}(nothing, value, vf, vt, ts, MAX_DT))
     end
-    return put_record!(s, key, Record{V}(nothing, value, vf, vt, ts, MAX_DT))
+end
+
+"""
+    retract!(s, key; valid_from, valid_to = MAX_DT, ts = now(UTC)) -> Vector{Record}
+
+"There is no value here anymore." Close every believed record overlapping
+`[valid_from, valid_to)` without inserting a replacement, so [`as_of`](@ref) over
+the range returns `nothing` at `tx_at >= ts` while the prior belief stays
+reproducible at an earlier `tx_at`. A partially-overlapped record keeps its
+surrounding slivers, exactly as [`correct!`](@ref). Returns the re-inserted
+sliver records (empty for a full retraction).
+"""
+function retract!(
+        s::BitemporalStore{K, V}, key;
+        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::DateTime = now(UTC),
+    ) where {K, V}
+    vf, vt = _instant(valid_from), _instant(valid_to)
+    _check_range(vf, vt)
+    return with_write_tx(s) do
+        _close_range!(s, key, vf, vt, ts)
+    end
 end
 
 # Turn a column spec into a `row -> value` accessor: a `Symbol` reads that column,
@@ -68,11 +121,12 @@ function load!(s::BitemporalStore, table; key, value, valid_from, ts, valid_to =
 end
 
 """
-    amend!(s, key, value; effective, ts = now(UTC))
+    amend!(s, key, value; effective, ts = now(UTC)) -> Vector{Record}
 
 "The world changed on `effective`." Close the believed chapter(s) covering
 `effective`, re-append the old value over `[valid_from, effective)`, and append
-`value` from `effective` on. Errors if nothing covers `effective`.
+`value` from `effective` on. Errors if nothing covers `effective`. Returns the
+newly inserted [`Record`](@ref)s.
 """
 function amend!(
         s::BitemporalStore{K, V}, key, value;
@@ -85,12 +139,22 @@ function amend!(
     isempty(covering) &&
         throw(ArgumentError("no believed record covers effective date $eff"))
     for r in covering
-        close_tx!(s, r.id, ts)
-        r.valid_from < eff &&
-            put_record!(s, key, Record{V}(nothing, r.value, r.valid_from, eff, ts, MAX_DT))
-        put_record!(s, key, Record{V}(nothing, value, eff, r.valid_to, ts, MAX_DT))
+        ts >= r.tx_from || throw(
+            ArgumentError(
+                "ts ($ts) predates the record's tx_from ($(r.tx_from)); transaction time is append-only",
+            ),
+        )
     end
-    return nothing
+    return with_write_tx(s) do
+        inserted = Record{V}[]
+        for r in covering
+            close_tx!(s, r.id, ts)
+            r.valid_from < eff &&
+                push!(inserted, put_record!(s, key, Record{V}(nothing, r.value, r.valid_from, eff, ts, MAX_DT)))
+            push!(inserted, put_record!(s, key, Record{V}(nothing, value, eff, r.valid_to, ts, MAX_DT)))
+        end
+        inserted
+    end
 end
 
 """

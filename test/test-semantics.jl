@@ -138,5 +138,66 @@
             @test Set(Tables.columnnames(cross)) == Set((:entity, :value))
             @test length(Tables.rowtable(cross)) == 2
         end
+
+        @testset "10. Correction of a subrange preserves surrounding belief" begin
+            s = make_store()
+            insert!(s, "A", 100.0; valid_from = Date(2024, 1, 1), ts = T1)   # [Jan 1, ∞)
+            correct!(s, "A", 110.0; valid_from = Date(2024, 3, 1), ts = T2)  # [Mar 1, ∞)
+            # The belief before the corrected subrange is preserved (the bug this fixes)...
+            @test as_of(s, "A"; valid_at = Date(2024, 2, 1), tx_at = T2) == 100.0
+            # ...and the corrected subrange holds the new value.
+            @test as_of(s, "A"; valid_at = Date(2024, 4, 1), tx_at = T2) == 110.0
+            # The pre-correction belief is unchanged at the earlier tx time.
+            @test as_of(s, "A"; valid_at = Date(2024, 2, 1), tx_at = T1) == 100.0
+            @test as_of(s, "A"; valid_at = Date(2024, 4, 1), tx_at = T1) == 100.0
+
+            # A correction strictly inside a bounded record preserves both slivers.
+            s2 = make_store()
+            insert!(
+                s2, "B", 1.0;
+                valid_from = Date(2024, 1, 1), valid_to = Date(2024, 12, 1), ts = T1,
+            )
+            correct!(
+                s2, "B", 2.0;
+                valid_from = Date(2024, 4, 1), valid_to = Date(2024, 7, 1), ts = T2,
+            )
+            @test as_of(s2, "B"; valid_at = Date(2024, 2, 1), tx_at = T2) == 1.0   # left sliver
+            @test as_of(s2, "B"; valid_at = Date(2024, 5, 1), tx_at = T2) == 2.0   # corrected
+            @test as_of(s2, "B"; valid_at = Date(2024, 9, 1), tx_at = T2) == 1.0   # right sliver
+        end
+
+        @testset "11. Retraction removes belief but keeps history" begin
+            s = make_store()
+            insert!(
+                s, "A", 100.0;
+                valid_from = Date(2024, 1, 1), valid_to = Date(2024, 12, 1), ts = T1,
+            )
+            # Subrange retraction: the middle is gone, the surrounding slivers remain.
+            slivers = retract!(s, "A"; valid_from = Date(2024, 3, 1), valid_to = Date(2024, 6, 1), ts = T2)
+            @test length(slivers) == 2
+            @test as_of(s, "A"; valid_at = Date(2024, 4, 1), tx_at = T2) === nothing
+            @test as_of(s, "A"; valid_at = Date(2024, 2, 1), tx_at = T2) == 100.0
+            @test as_of(s, "A"; valid_at = Date(2024, 7, 1), tx_at = T2) == 100.0
+            # The prior belief is still reproducible at the earlier tx time.
+            @test as_of(s, "A"; valid_at = Date(2024, 4, 1), tx_at = T1) == 100.0
+
+            # Full retraction leaves nothing believed and inserts no slivers.
+            @test isempty(retract!(s, "A"; valid_from = Date(2024, 1, 1), valid_to = Date(2024, 12, 1), ts = T3))
+            @test as_of(s, "A"; valid_at = Date(2024, 2, 1), tx_at = T3) === nothing
+            @test as_of(s, "A"; valid_at = Date(2024, 7, 1), tx_at = T3) === nothing
+            @test as_of(s, "A"; valid_at = Date(2024, 2, 1), tx_at = T1) == 100.0
+        end
+
+        @testset "12. Transaction time cannot go backwards on close" begin
+            s = make_store()
+            insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = T2)
+            # A close with ts earlier than the record's tx_from is rejected.
+            @test_throws ArgumentError correct!(s, "A", 2.0; valid_from = Date(2024, 1, 1), ts = T1)
+            @test_throws ArgumentError retract!(s, "A"; valid_from = Date(2024, 1, 1), ts = T1)
+            @test_throws ArgumentError amend!(s, "A", 2.0; effective = Date(2024, 6, 1), ts = T1)
+            # Each rejected write left the store untouched.
+            @test as_of(s, "A"; valid_at = Date(2024, 6, 1), tx_at = T2) == 1.0
+            @test length(history(s, "A").value) == 1
+        end
     end
 end
