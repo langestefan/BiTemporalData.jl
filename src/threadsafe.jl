@@ -31,3 +31,7 @@ get_records(t::ThreadSafe, key) = lock(() -> get_records(t.store, key), t.lock)
 put_record!(t::ThreadSafe, key, r) = lock(() -> put_record!(t.store, key, r), t.lock)
 close_tx!(t::ThreadSafe, id, ts) = lock(() -> close_tx!(t.store, id, ts), t.lock)
 entities(t::ThreadSafe) = lock(() -> entities(t.store), t.lock)
+
+# Forward the transaction hook to the inner store with no extra lock: the caller
+# (an operation above) already holds it.
+with_write_tx(f, t::ThreadSafe) = with_write_tx(f, t.store)

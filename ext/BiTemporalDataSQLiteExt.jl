@@ -7,7 +7,7 @@ using SQLite.DBInterface: execute, lastrowid
 using Serialization: serialize, deserialize
 using Dates: Dates, DateTime
 using BiTemporalData: SQLiteStore, Record, MAX_DT
-import BiTemporalData: get_records, put_record!, close_tx!, entities
+import BiTemporalData: get_records, put_record!, close_tx!, entities, with_write_tx
 
 # Generic (de)serialization of keys and values to/from SQLite BLOBs.
 _blob(x) = (io = IOBuffer(); serialize(io, x); take!(io))
@@ -96,5 +96,10 @@ end
 function entities(s::SQLiteStore{K, V}) where {K, V}
     return K[_unblob(row.key) for row in execute(s.db, "SELECT DISTINCT key FROM $(s.table)")]
 end
+
+# SQLite is transactional: run a multi-statement write atomically. `transaction`
+# rolls back and rethrows if `f` errors, so a failed correct!/amend!/retract!
+# leaves the file unchanged.
+with_write_tx(f, s::SQLiteStore) = SQLite.transaction(f, s.db)
 
 end # module
