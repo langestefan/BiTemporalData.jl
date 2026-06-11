@@ -7,7 +7,7 @@ using DuckDB.DBInterface: execute
 using Serialization: serialize, deserialize
 using Dates: Dates, DateTime, TimeType, UTC, now
 using BiTemporalData: DuckDBStore, Record, MAX_DT, _instant
-import BiTemporalData: get_records, put_record!, close_tx!, entities, snapshot
+import BiTemporalData: get_records, put_record!, close_tx!, entities, snapshot, with_write_tx
 
 # Generic (de)serialization of keys and values to/from DuckDB BLOBs.
 _blob(x) = (io = IOBuffer(); serialize(io, x); take!(io))
@@ -97,6 +97,21 @@ end
 
 function entities(s::DuckDBStore{K, V}) where {K, V}
     return K[_unblob(row.key) for row in execute(s.db, "SELECT DISTINCT key FROM $(s.table)")]
+end
+
+# DuckDB is transactional, but DBInterface.transaction is not wired up, so drive
+# it by hand: COMMIT on success, ROLLBACK and rethrow on error, so a failed
+# correct!/amend!/retract! leaves the file unchanged.
+function with_write_tx(f, s::DuckDBStore)
+    execute(s.db, "BEGIN TRANSACTION")
+    try
+        result = f()
+        execute(s.db, "COMMIT")
+        return result
+    catch
+        execute(s.db, "ROLLBACK")
+        rethrow()
+    end
 end
 
 # --- native snapshot ------------------------------------------------------

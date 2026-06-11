@@ -11,3 +11,16 @@ function close_tx! end
 
 "`entities(s)`: all keys the store knows about."
 function entities end
+
+# An optional fifth hook: run a multi-statement write atomically.
+
+"""
+    with_write_tx(f, s)
+
+Run `f()` atomically on `s` if the backend supports transactions, otherwise just
+`f()`. Multi-step writes (`correct!`, `amend!`, `retract!`) wrap their body in
+this so a crash midway cannot leave a transactional backend half-updated. The
+default is a no-op (`f()`); transactional backends override it. Returns `f()`'s
+value.
+"""
+with_write_tx(f, ::BitemporalStore) = f()

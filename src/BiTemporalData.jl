@@ -24,6 +24,7 @@ export BitemporalStore, ColumnarStore,
 export amend!, as_of, as_of_batch, asof_join, correct!, history, load!, snapshot
 
 # Backend primitives and traits (for authors of new backends)
-export close_tx!, entities, get_records, put_record!, supports_parallel_reads
+export close_tx!, entities, get_records, put_record!, supports_parallel_reads,
+    with_write_tx
 
 end
