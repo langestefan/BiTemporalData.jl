@@ -9,7 +9,12 @@ function put_record! end
 "`close_tx!(s, id, ts)`: set the record's `tx_to` to `ts`. Idempotent."
 function close_tx! end
 
-"`entities(s)`: all keys the store knows about."
+"""
+`entities(s)`: all keys the store knows about. The returned iterable must be
+safe to iterate after the call returns, i.e. detached from the store's internal
+state (return a snapshot, not a live view), so a caller behind [`ThreadSafe`](@ref)
+can iterate it once the lock is released.
+"""
 function entities end
 
 # An optional fifth hook: run a multi-statement write atomically.

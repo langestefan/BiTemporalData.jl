@@ -26,6 +26,8 @@ function close_tx!(s::MemoryStore, (key, idx)::Tuple, ts::DateTime)
     return nothing
 end
 
-entities(s::MemoryStore) = keys(s.records)
+# Snapshot the keys (not the live `KeySet`): callers, including those behind
+# `ThreadSafe`, iterate the result after the lock is released.
+entities(s::MemoryStore) = collect(keys(s.records))
 
 supports_parallel_reads(::MemoryStore) = true
