@@ -13,6 +13,11 @@ end
 
 Record a new fact over `[valid_from, valid_to)`. `valid_from`/`valid_to` accept any
 `TimeType` (a `Date` is taken as midnight). Returns the stored [`Record`](@ref).
+
+`insert!` does not check for overlap with an existing believed record: two
+overlapping current beliefs both stand, and a read resolves them by the
+[`as_of`](@ref) tie rule (latest `tx_from`, then the later write). To re-state a
+fact, use [`correct!`](@ref), which closes the prior belief first.
 """
 function Base.insert!(
         s::BitemporalStore{K, V}, key, value;
@@ -179,6 +184,13 @@ The value believed at `tx_at` to hold at `valid_at`, or `nothing`. Both `valid_a
 and `tx_at` accept any `TimeType` (a `Date` is taken as midnight). When more than
 one record is believed over `valid_at` at `tx_at`, the one with the latest
 `tx_from` wins, and a tie on `tx_from` resolves to the later write (append order).
+
+A record closed at the very instant it was created (`tx_to == tx_from`, e.g. a
+correction whose `ts` equals an earlier write's) has an empty belief interval: it
+never satisfies `tx_from <= tx_at < tx_to`, so `as_of` never returns it, though
+[`history`](@ref) still shows it. Transaction time has millisecond resolution
+(`DateTime`), so distinct real-time writes rarely collide; [`load!`](@ref) rows
+sharing a key, range, and `ts` keep only the last (the later write wins the tie).
 """
 function as_of(
         s::BitemporalStore{K, V}, key;
