@@ -150,7 +150,8 @@ function snapshot(
                 s.db,
                 "SELECT key, value FROM (" *
                     "SELECT key, value, " *
-                    "row_number() OVER (PARTITION BY key ORDER BY tx_from DESC) AS rn " *
+                    # `id DESC` breaks tx_from ties by append order, matching _pick (T6).
+                    "row_number() OVER (PARTITION BY key ORDER BY tx_from DESC, id DESC) AS rn " *
                     "FROM $(s.table) " *
                     "WHERE tx_from <= ? AND ? < tx_to AND valid_from <= ? AND ? < valid_to" *
                     ") WHERE rn = 1 ORDER BY key",
