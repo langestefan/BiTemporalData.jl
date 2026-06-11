@@ -1,7 +1,7 @@
 module BiTemporalData
 
 using Base.Threads: @threads
-using Dates: DateTime, TimeType, now
+using Dates: DateTime, TimeType, UTC, now
 using Tables: getcolumn, rows
 
 include("types.jl")
