@@ -58,9 +58,9 @@ load!(t::ThreadSafe, table; kw...) = (_locked(s -> load!(s, table; kw...), t); t
 # not help (the lock already serializes), so force the serial path.
 function as_of_batch(
         t::ThreadSafe{K, V}, keys::Vector{K},
-        valid_ats::Vector{<:TimeType}, tx_ats::Vector{<:TimeType}; threaded::Bool = false,
+        effective_ats::Vector{<:TimeType}, assertive_ats::Vector{<:TimeType}; threaded::Bool = false,
     ) where {K, V}
-    return _locked(s -> as_of_batch(s, keys, valid_ats, tx_ats; threaded = false), t)
+    return _locked(s -> as_of_batch(s, keys, effective_ats, assertive_ats; threaded = false), t)
 end
 Base.diff(t::ThreadSafe; kw...) = _locked(s -> diff(s; kw...), t)
 
@@ -74,7 +74,7 @@ end
 # above go through `_locked` too, so they never route through these.
 get_records(t::ThreadSafe, key) = _locked(s -> get_records(s, key), t)
 put_record!(t::ThreadSafe, key, r) = _locked(s -> put_record!(s, key, r), t)
-close_tx!(t::ThreadSafe, id, ts) = _locked(s -> close_tx!(s, id, ts), t)
+close_tx!(t::ThreadSafe, id, asserted_at) = _locked(s -> close_tx!(s, id, asserted_at), t)
 entities(t::ThreadSafe) = _locked(s -> entities(s), t)
 
 # Re-taking the lock here is safe and cheap (ReentrantLock is reentrant).

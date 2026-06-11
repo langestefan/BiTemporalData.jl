@@ -1,25 +1,25 @@
-"Sentinel for an open range end: `typemax(DateTime)`. `tx_to == MAX_DT` means currently believed."
+"Sentinel for an open range end: `typemax(DateTime)`. `assertive_to == MAX_DT` means currently asserted."
 const MAX_DT = typemax(DateTime)
 
 """
     Record{V}
 
-Append-only bitemporal record: `value` over half-open `[valid_from, valid_to)`
-(valid time) and `[tx_from, tx_to)` (transaction time). Both axes are `DateTime`.
-Only `tx_to` may change (see [`close_tx!`](@ref)). `id` is backend-assigned by
+Append-only bitemporal record: `value` over half-open `[effective_from, effective_to)`
+(effective time) and `[assertive_from, assertive_to)` (assertive time). Both axes are `DateTime`.
+Only `assertive_to` may change (see [`close_tx!`](@ref)). `id` is backend-assigned by
 [`put_record!`](@ref).
 
-Transaction time is UTC by convention: the operations default `ts` to `now(UTC)`,
-so the "latest `tx_from` wins" rule and audit ordering never go backwards across a
-DST boundary. A caller passing an explicit `ts` is responsible for supplying UTC.
+Assertive time is UTC by convention: the operations default `asserted_at` to `now(UTC)`,
+so the "latest `assertive_from` wins" rule and audit ordering never go backwards across a
+DST boundary. A caller passing an explicit `asserted_at` is responsible for supplying UTC.
 """
 struct Record{V}
     id::Any
     value::V
-    valid_from::DateTime
-    valid_to::DateTime
-    tx_from::DateTime
-    tx_to::DateTime
+    effective_from::DateTime
+    effective_to::DateTime
+    assertive_from::DateTime
+    assertive_to::DateTime
 end
 
 """
@@ -37,11 +37,11 @@ abstract type BitemporalStore{K, V} end
 # that converts to the UTC instant (so times across zones order correctly).
 _instant(x::TimeType) = DateTime(x)
 
-# `Record` is immutable, so closing `tx_to` means rebuilding.
-_close(r::Record, ts::DateTime) =
-    Record(r.id, r.value, r.valid_from, r.valid_to, r.tx_from, ts)
+# `Record` is immutable, so closing `assertive_to` means rebuilding.
+_close(r::Record, asserted_at::DateTime) =
+    Record(r.id, r.value, r.effective_from, r.effective_to, r.assertive_from, asserted_at)
 
 # Do half-open `[a, b)` and `[c, d)` overlap?
 _overlaps(a, b, c, d) = a < d && c < b
 
-_believed(r::Record) = r.tx_to == MAX_DT
+_asserted(r::Record) = r.assertive_to == MAX_DT

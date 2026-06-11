@@ -10,10 +10,10 @@ end
 
     function build(make)
         s = make()
-        insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
-        insert!(s, "B", 5.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
-        correct!(s, "A", 2.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 3))
-        amend!(s, "A", 9.0; effective = Date(2024, 7, 1), ts = DateTime(2024, 1, 4))
+        insert!(s, "A", 1.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
+        insert!(s, "B", 5.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
+        correct!(s, "A", 2.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 3))
+        amend!(s, "A", 9.0; effective = Date(2024, 7, 1), asserted_at = DateTime(2024, 1, 4))
         return s
     end
     mem = build(() -> MemoryStore{String, Float64}())
@@ -22,15 +22,15 @@ end
     rowset(nt) = Set(Tuple(c[i] for c in values(nt)) for i in eachindex(first(nt)))
 
     for txa in (DateTime(2024, 1, 2), DateTime(2024, 1, 5))
-        @test rowset(snapshot(col; tx_at = txa)) == rowset(snapshot(mem; tx_at = txa))
+        @test rowset(snapshot(col; assertive_at = txa)) == rowset(snapshot(mem; assertive_at = txa))
         for va in (Date(2024, 3, 1), Date(2024, 9, 1))
-            @test rowset(snapshot(col; valid_at = va, tx_at = txa)) ==
-                rowset(snapshot(mem; valid_at = va, tx_at = txa))
+            @test rowset(snapshot(col; effective_at = va, assertive_at = txa)) ==
+                rowset(snapshot(mem; effective_at = va, assertive_at = txa))
         end
     end
 
     # The value column is a plain contiguous `Vector{V}` (the ML/GPU read path).
-    v = snapshot(col; tx_at = DateTime(2024, 1, 5)).value
+    v = snapshot(col; assertive_at = DateTime(2024, 1, 5)).value
     @test v isa Vector{Float64}
 end
 
@@ -39,9 +39,9 @@ end
     using Dates
 
     s = ColumnarStore{String, Float64}()
-    insert!(s, "Amsterdam", 1.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+    insert!(s, "Amsterdam", 1.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
     sub = SubString("xAmsterdamx", 2, 10)
-    @test as_of(s, sub; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 2, 1)) == 1.0
+    @test as_of(s, sub; effective_at = Date(2024, 6, 1), assertive_at = DateTime(2024, 2, 1)) == 1.0
     @test eltype(collect(entities(s))) == String
 end
 
@@ -55,8 +55,8 @@ end
         s = make()
         for i in 1:40
             k = "e$i"
-            insert!(s, k, float(i); valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
-            correct!(s, k, float(i) + 0.5; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 2))
+            insert!(s, k, float(i); effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
+            correct!(s, k, float(i) + 0.5; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 2))
         end
         return s
     end
@@ -67,8 +67,8 @@ end
     va = fill(Date(2024, 6, 1), 200)
     ta = [iseven(i) ? DateTime(2024, 1, 1) : DateTime(2024, 1, 3) for i in 1:200]
 
-    @test [as_of(col, ks[i]; valid_at = va[i], tx_at = ta[i]) for i in eachindex(ks)] ==
-        [as_of(mem, ks[i]; valid_at = va[i], tx_at = ta[i]) for i in eachindex(ks)]
+    @test [as_of(col, ks[i]; effective_at = va[i], assertive_at = ta[i]) for i in eachindex(ks)] ==
+        [as_of(mem, ks[i]; effective_at = va[i], assertive_at = ta[i]) for i in eachindex(ks)]
     @test as_of_batch(col, ks, va, ta) == as_of_batch(mem, ks, va, ta)
     @test as_of_batch(col, ks, va, ta; threaded = true) == as_of_batch(mem, ks, va, ta)
     @test as_of(col, "absent") === nothing

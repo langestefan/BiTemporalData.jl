@@ -2,7 +2,7 @@
     using Dates
 
     # A vector of NamedTuples is a valid Tables.jl row source. Rows are out of
-    # transaction-time order on purpose; load! must sort them.
+    # assertive-time order on purpose; load! must sort them.
     table = [
         (city = "A", t = 1.0, day = Date(2024, 1, 1), issued = DateTime(2024, 1, 3)),
         (city = "A", t = 2.0, day = Date(2024, 1, 1), issued = DateTime(2024, 1, 1)),
@@ -14,33 +14,33 @@
     @test load!(
         s, table;
         key = :city, value = :t,
-        valid_from = :day, valid_to = r -> r.day + Day(1), ts = :issued,
+        effective_from = :day, effective_to = r -> r.day + Day(1), asserted_at = :issued,
     ) === s   # returns the same store
 
-    # Equivalent to applying correct! in ascending ts order by hand.
+    # Equivalent to applying correct! in ascending asserted_at order by hand.
     ref = MemoryStore{String, Float64}()
     for r in sort(table; by = r -> r.issued)
-        correct!(ref, r.city, r.t; valid_from = r.day, valid_to = r.day + Day(1), ts = r.issued)
+        correct!(ref, r.city, r.t; effective_from = r.day, effective_to = r.day + Day(1), asserted_at = r.issued)
     end
     @test snapshot(s) == snapshot(ref)
 
     # Belief chains across the three vintages of A's 2024-01-01.
-    a(tx) = as_of(s, "A"; valid_at = Date(2024, 1, 1), tx_at = tx)
+    a(at) = as_of(s, "A"; effective_at = Date(2024, 1, 1), assertive_at = at)
     @test a(DateTime(2024, 1, 1)) == 2.0
     @test a(DateTime(2024, 1, 2)) == 3.0
     @test a(DateTime(2024, 1, 3)) == 1.0
     @test history(s, "A").value == [2.0, 3.0, 1.0]
-    @test as_of(s, "B"; valid_at = Date(2024, 2, 1), tx_at = DateTime(2024, 1, 2)) == 9.0
+    @test as_of(s, "B"; effective_at = Date(2024, 2, 1), assertive_at = DateTime(2024, 1, 2)) == 9.0
 
-    # The valid_to default (MAX_DT) leaves the range open-ended.
+    # The effective_to default (MAX_DT) leaves the range open-ended.
     open = load!(
         MemoryStore{String, Float64}(), [(k = "x", v = 5.0, d = Date(2024, 1, 1))];
-        key = :k, value = :v, valid_from = :d, ts = r -> DateTime(2024, 1, 1),
+        key = :k, value = :v, effective_from = :d, asserted_at = r -> DateTime(2024, 1, 1),
     )
-    @test history(open, "x").valid_to == [MAX_DT]
+    @test history(open, "x").effective_to == [MAX_DT]
 
     # Empty source is a no-op.
-    @test isempty(entities(load!(MemoryStore{Int, Int}(), NamedTuple[]; key = :k, value = :v, valid_from = :f, ts = :t)))
+    @test isempty(entities(load!(MemoryStore{Int, Int}(), NamedTuple[]; key = :k, value = :v, effective_from = :f, asserted_at = :t)))
 end
 
 @testitem "load! matches a per-row correct! loop on a messy table" tags = [:unit] begin
@@ -49,22 +49,22 @@ end
     using Dates
 
     # Deterministic pseudo-random table: 5 keys, overlapping ranges, out-of-order
-    # and duplicate ts. load! (fetch-once, in-memory believed set) must produce
-    # byte-identical history to applying correct! per row in stable ts order.
+    # and duplicate asserted_at. load! (fetch-once, in-memory asserted set) must produce
+    # byte-identical history to applying correct! per row in stable asserted_at order.
     table = NamedTuple[]
     for i in 1:200
         k = "k$(mod1(i * 7, 5))"
         vf = Date(2024, mod1(i * 13, 11), mod1(i * 17, 28))
         vt = vf + Day(mod1(i * 11, 120))
         tsd = DateTime(2024, 1, 1) + Day(mod1(i * 5, 40))   # duplicates + out of order
-        push!(table, (key = k, value = float(mod1(i * 3, 100)), vf = vf, vt = vt, ts = tsd))
+        push!(table, (key = k, value = float(mod1(i * 3, 100)), vf = vf, vt = vt, asserted_at = tsd))
     end
 
     function histset(s, k)
         h = history(s, k)
         return sort(
             [
-                (h.value[i], h.valid_from[i], h.valid_to[i], h.tx_from[i], h.tx_to[i])
+                (h.value[i], h.effective_from[i], h.effective_to[i], h.assertive_from[i], h.assertive_to[i])
                     for i in eachindex(h.value)
             ]
         )
@@ -78,11 +78,11 @@ end
     )
     for make in backends
         loaded = make()
-        load!(loaded, table; key = :key, value = :value, valid_from = :vf, valid_to = :vt, ts = :ts)
+        load!(loaded, table; key = :key, value = :value, effective_from = :vf, effective_to = :vt, asserted_at = :asserted_at)
 
         ref = make()
-        for r in sort(table; by = r -> r.ts, alg = Base.Sort.MergeSort)
-            correct!(ref, r.key, r.value; valid_from = r.vf, valid_to = r.vt, ts = r.ts)
+        for r in sort(table; by = r -> r.asserted_at, alg = Base.Sort.MergeSort)
+            correct!(ref, r.key, r.value; effective_from = r.vf, effective_to = r.vt, asserted_at = r.asserted_at)
         end
 
         for k in ["k1", "k2", "k3", "k4", "k5"]

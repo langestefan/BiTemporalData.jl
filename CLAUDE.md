@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A Julia package for **bitemporal** fact storage: every fact is tracked along two
-independent time axes: *valid time* (when it is true in the world) and
-*transaction time* (when the system believed it). This lets the store distinguish
+independent time axes: *effective time* (when it is true in the world) and
+*assertive time* (when the system asserted it). This lets the store distinguish
 "the world changed" from "we changed our mind."
 
 The package is scaffolded from [BestieTemplate.jl](https://github.com/JuliaBesties/BestieTemplate.jl).
@@ -20,16 +20,16 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
 - `types.jl`: `Record` (both time axes are `DateTime`), `BitemporalStore`, the
   `MAX_DT` sentinel, the `_instant(::TimeType)` normalizer (a `Date` becomes
   midnight; the TimeZones extension adds a `ZonedDateTime` → UTC method), and the
-  internal `_close`/`_overlaps`/`_believed` helpers.
+  internal `_close`/`_overlaps`/`_asserted` helpers.
 - `interface.jl`: the four backend primitive declarations, plus the optional
   fifth hook `with_write_tx(f, s)` (run `f()` atomically; no-op default).
 - `defaults.jl`: `insert!` (extends `Base.insert!`, with an opt-in
   `check_overlap`), `correct!`, `retract!`, `amend!`, `as_of`, `history`, and
   `load!`. `correct!`/`retract!` share the internal `_close_range!` helper (close
-  overlapping believed records, re-insert the preserved slivers, guard tx
+  overlapping asserted records, re-insert the preserved slivers, guard assertive
   ordering); the multi-step writes wrap their body in `with_write_tx`. `_pick`
-  (the single `as_of` selection rule, latest `tx_from` then later write) lives
-  here too. `load!` fetches each key once and maintains the believed set in
+  (the single `as_of` selection rule, latest `assertive_from` then later write) lives
+  here too. `load!` fetches each key once and maintains the asserted set in
   memory (it no longer calls `correct!` per row).
 - `snapshot.jl`: `snapshot`.
 - `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built
@@ -105,21 +105,21 @@ The design separates an **abstract store interface** from concrete backends:
   passes the full semantic suite, so the suite doubles as its correctness check.
 
 Key invariants that shape the whole design: records are **append-only** (only
-`tx_to` may be mutated, to close it), all intervals are **half-open `[from, to)`**,
+`assertive_to` may be mutated, to close it), all intervals are **half-open `[from, to)`**,
 both axes are **`DateTime`**, and open-ended ranges use the `MAX_DT` sentinel.
-"Currently believed" means `tx_to == MAX_DT`. Public operations accept any
-`TimeType` for both valid-time and transaction-time args (`tx_at`, `ts`) and
-normalize through `_instant`; transaction time defaults to `now(UTC)`. When two
-records tie on `tx_from`, the later write (append order) wins, consistently
+"Currently asserted" means `assertive_to == MAX_DT`. Public operations accept any
+`TimeType` for both effective-time and assertive-time args (`assertive_at`, `asserted_at`) and
+normalize through `_instant`; assertive time defaults to `now(UTC)`. When two
+records tie on `assertive_from`, the later write (append order) wins, consistently
 across `as_of`, `as_of_batch`, and the native SQLite/DuckDB snapshots.
 
 The **snapshot** is the intended read boundary for read-heavy workloads (ML, bulk
 analytics): a single linear pass producing a flat columnar table frozen at a fixed
-`tx_at`, which makes reads reproducible and point-in-time leakage-proof. Do not
+`assertive_at`, which makes reads reproducible and point-in-time leakage-proof. Do not
 query the live store per-record for those workloads; materialize a snapshot.
 
-All write operations take an optional `ts=` keyword purely for test determinism;
-production callers omit it. Tests must pass explicit `ts=` and never rely on `sleep`
+All write operations take an optional `asserted_at=` keyword purely for test determinism;
+production callers omit it. Tests must pass explicit `asserted_at=` and never rely on `sleep`
 or wall-clock timing.
 
 Implementation specifics worth knowing before editing:
@@ -133,7 +133,7 @@ Implementation specifics worth knowing before editing:
   are *not* in the `export` list and `@autodocs` won't pick them up;
   `docs/src/reference.md` documents them with explicit signature-filtered `@docs` blocks.
 - `snapshot` can't dispatch on keywords, so it selects its two modes via a
-  `valid_at` sentinel (`nothing` → full tx-slice; a `TimeType` → collapsed
+  `effective_at` sentinel (`nothing` → full assertive-slice; a `TimeType` → collapsed
   cross-section).
 
 ## Commands

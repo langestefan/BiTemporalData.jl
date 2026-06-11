@@ -30,10 +30,10 @@ function SQLiteStore{K, V}(db::DB; table::AbstractString = "records") where {K, 
             id INTEGER PRIMARY KEY,
             key BLOB NOT NULL,
             value BLOB NOT NULL,
-            valid_from INTEGER NOT NULL,
-            valid_to INTEGER NOT NULL,
-            tx_from INTEGER NOT NULL,
-            tx_to INTEGER NOT NULL
+            effective_from INTEGER NOT NULL,
+            effective_to INTEGER NOT NULL,
+            assertive_from INTEGER NOT NULL,
+            assertive_to INTEGER NOT NULL
         )
         """,
     )
@@ -50,26 +50,26 @@ end
 function put_record!(s::SQLiteStore{K, V}, key, r::Record{V}) where {K, V}
     res = execute(
         s.db,
-        "INSERT INTO $(s.table) (key, value, valid_from, valid_to, tx_from, tx_to) " *
+        "INSERT INTO $(s.table) (key, value, effective_from, effective_to, assertive_from, assertive_to) " *
             "VALUES (?, ?, ?, ?, ?, ?)",
         (
             # Normalize the key to `K` first: serialization is type-sensitive, so
             # the blob must not depend on the caller's concrete argument type
             # (e.g. an `InlineString` from CSV vs a `String`).
             _blob(convert(K, key)), _blob(r.value),
-            Dates.value(r.valid_from), Dates.value(r.valid_to),
-            Dates.value(r.tx_from), Dates.value(r.tx_to),
+            Dates.value(r.effective_from), Dates.value(r.effective_to),
+            Dates.value(r.assertive_from), Dates.value(r.assertive_to),
         ),
     )
     id = lastrowid(res)
-    return Record{V}(id, r.value, r.valid_from, r.valid_to, r.tx_from, r.tx_to)
+    return Record{V}(id, r.value, r.effective_from, r.effective_to, r.assertive_from, r.assertive_to)
 end
 
 function get_records(s::SQLiteStore{K, V}, key) where {K, V}
     out = Record{V}[]
     for row in execute(
             s.db,
-            "SELECT id, value, valid_from, valid_to, tx_from, tx_to " *
+            "SELECT id, value, effective_from, effective_to, assertive_from, assertive_to " *
                 "FROM $(s.table) WHERE key = ? ORDER BY id",
             (_blob(convert(K, key)),),
         )
@@ -77,20 +77,20 @@ function get_records(s::SQLiteStore{K, V}, key) where {K, V}
             out,
             Record{V}(
                 row.id, _unblob(row.value),
-                _dt(row.valid_from), _dt(row.valid_to),
-                _dt(row.tx_from), _dt(row.tx_to),
+                _dt(row.effective_from), _dt(row.effective_to),
+                _dt(row.assertive_from), _dt(row.assertive_to),
             ),
         )
     end
     return out
 end
 
-function close_tx!(s::SQLiteStore, id, ts::DateTime)
-    # Idempotent: the `tx_to = MAX_DT` guard means a second call matches no rows.
+function close_tx!(s::SQLiteStore, id, asserted_at::DateTime)
+    # Idempotent: the `assertive_to = MAX_DT` guard means a second call matches no rows.
     execute(
         s.db,
-        "UPDATE $(s.table) SET tx_to = ? WHERE id = ? AND tx_to = ?",
-        (Dates.value(ts), id, Dates.value(MAX_DT)),
+        "UPDATE $(s.table) SET assertive_to = ? WHERE id = ? AND assertive_to = ?",
+        (Dates.value(asserted_at), id, Dates.value(MAX_DT)),
     )
     return nothing
 end
@@ -111,40 +111,40 @@ with_write_tx(f, s::SQLiteStore) = SQLite.transaction(f, s.db)
 
 function snapshot(
         s::SQLiteStore{K, V};
-        valid_at::Union{TimeType, Nothing} = nothing, tx_at::TimeType = now(UTC),
+        effective_at::Union{TimeType, Nothing} = nothing, assertive_at::TimeType = now(UTC),
     ) where {K, V}
-    t = Dates.value(_instant(tx_at))
-    if valid_at === nothing
+    t = Dates.value(_instant(assertive_at))
+    if effective_at === nothing
         ent = K[]
         val = V[]
         vf = DateTime[]
         vt = DateTime[]
         for row in execute(
                 s.db,
-                "SELECT key, value, valid_from, valid_to FROM $(s.table) " *
-                    "WHERE tx_from <= ? AND ? < tx_to ORDER BY key, id",
+                "SELECT key, value, effective_from, effective_to FROM $(s.table) " *
+                    "WHERE assertive_from <= ? AND ? < assertive_to ORDER BY key, id",
                 (t, t),
             )
             push!(ent, _unblob(row.key))
             push!(val, _unblob(row.value))
-            push!(vf, _dt(row.valid_from))
-            push!(vt, _dt(row.valid_to))
+            push!(vf, _dt(row.effective_from))
+            push!(vt, _dt(row.effective_to))
         end
-        return (entity = ent, value = val, valid_from = vf, valid_to = vt)
+        return (entity = ent, value = val, effective_from = vf, effective_to = vt)
     else
-        v = Dates.value(_instant(valid_at))
+        v = Dates.value(_instant(effective_at))
         ent = K[]
         val = V[]
-        # Per entity, the value with the latest tx_from among records that the
-        # belief at `tx_at` holds over `valid_at`: the SQL form of `as_of`.
-        # `id DESC` breaks tx_from ties by append order, matching _pick.
+        # Per entity, the value with the latest assertive_from among records that the
+        # assertion at `assertive_at` holds over `effective_at`: the SQL form of `as_of`.
+        # `id DESC` breaks assertive_from ties by append order, matching _pick.
         for row in execute(
                 s.db,
                 "SELECT key, value FROM (" *
                     "SELECT key, value, " *
-                    "row_number() OVER (PARTITION BY key ORDER BY tx_from DESC, id DESC) AS rn " *
+                    "row_number() OVER (PARTITION BY key ORDER BY assertive_from DESC, id DESC) AS rn " *
                     "FROM $(s.table) " *
-                    "WHERE tx_from <= ? AND ? < tx_to AND valid_from <= ? AND ? < valid_to" *
+                    "WHERE assertive_from <= ? AND ? < assertive_to AND effective_from <= ? AND ? < effective_to" *
                     ") WHERE rn = 1 ORDER BY key",
                 (t, t, v, v),
             )

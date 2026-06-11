@@ -6,7 +6,7 @@ function get_records end
 "`put_record!(s, key, record)`: append `record` (`id = nothing`); return it with `id` assigned."
 function put_record! end
 
-"`close_tx!(s, id, ts)`: set the record's `tx_to` to `ts`. Idempotent."
+"`close_tx!(s, id, asserted_at)`: set the record's `assertive_to` to `asserted_at`. Idempotent."
 function close_tx! end
 
 """

@@ -12,14 +12,14 @@ end
     n = 200
     same = ThreadSafe(MemoryStore{String, Int}())
     @sync for i in 1:n
-        Threads.@spawn insert!(same, "k", i; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+        Threads.@spawn insert!(same, "k", i; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
     end
     # No append lost to a race on the index.
     @test length(history(same, "k").value) == n
 
     distinct = ThreadSafe(MemoryStore{Int, Int}())
     @sync for i in 1:n
-        Threads.@spawn insert!(distinct, i, i; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+        Threads.@spawn insert!(distinct, i, i; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
     end
     @test length(collect(entities(distinct))) == n
 end
@@ -32,8 +32,8 @@ end
 
     # load! through the wrapper returns the wrapper and ingests under the lock.
     table = [(k = "A", v = 1.0, d = Date(2024, 1, 1), t = DateTime(2024, 1, 1))]
-    @test load!(s, table; key = :k, value = :v, valid_from = :d, ts = :t) === s
-    @test as_of(s, "A"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 2, 1)) == 1.0
+    @test load!(s, table; key = :k, value = :v, effective_from = :d, asserted_at = :t) === s
+    @test as_of(s, "A"; effective_at = Date(2024, 6, 1), assertive_at = DateTime(2024, 2, 1)) == 1.0
 
     # A wrapped store never threads its own reads.
     @test supports_parallel_reads(s) == false
@@ -45,7 +45,7 @@ end
     stored = put_record!(s, "B", Record{Float64}(nothing, 9.0, DateTime(2024, 1, 1), MAX_DT, DateTime(2024, 1, 1), MAX_DT))
     @test get_records(s, "B")[1].value == 9.0
     close_tx!(s, stored.id, DateTime(2024, 1, 2))
-    @test get_records(s, "B")[1].tx_to == DateTime(2024, 1, 2)
+    @test get_records(s, "B")[1].assertive_to == DateTime(2024, 1, 2)
 end
 
 @testitem "ThreadSafe entities is safe to iterate under a concurrent writer" tags = [:unit] begin
@@ -56,13 +56,13 @@ end
     # the `entities` snapshot and read each. If `entities` leaked the live KeySet,
     # iterating it after the lock released would throw on concurrent mutation.
     s = ThreadSafe(MemoryStore{Int, Int}())
-    insert!(s, 0, 0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+    insert!(s, 0, 0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
     writer = Threads.@spawn for i in 1:2000
-        insert!(s, i, i; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+        insert!(s, i, i; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
     end
     for _ in 1:5000
         for k in entities(s)
-            as_of(s, k; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 1))
+            as_of(s, k; effective_at = Date(2024, 6, 1), assertive_at = DateTime(2024, 1, 1))
         end
         istaskdone(writer) && break
         yield()
@@ -81,18 +81,18 @@ end
     # crash mid-fetch).
     s = ThreadSafe(MemoryStore{String, Int}())
     for i in 1:20
-        insert!(s, "k$i", 0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+        insert!(s, "k$i", 0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
     end
     base = DateTime(2024, 1, 2)
     writer = Threads.@spawn for v in 1:500
-        correct!(s, "k$(mod1(v, 20))", v; valid_from = Date(2024, 1, 1), ts = base + Millisecond(v))
+        correct!(s, "k$(mod1(v, 20))", v; effective_from = Date(2024, 1, 1), asserted_at = base + Millisecond(v))
     end
     consistent = Ref(true)   # Ref so the loop body (soft scope) mutates it
     va = fill(Date(2024, 6, 1), 20)
     keys = ["k$i" for i in 1:20]
     for _ in 1:3000
         txn = base + Millisecond(600)
-        d = diff(s; tx_at_old = base, tx_at_new = txn)
+        d = diff(s; assertive_at_old = base, assertive_at_new = txn)
         for i in eachindex(d.kind)
             d.kind[i] === :corrected && d.old_value[i] == d.new_value[i] && (consistent[] = false)
         end

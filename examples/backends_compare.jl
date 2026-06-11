@@ -12,11 +12,11 @@ df = CSV.read(joinpath(@__DIR__, "weather_forecasts.csv"), DataFrame)
 ingest!(s) = load!(
     s, df;
     key = :city, value = :temp_c,
-    valid_from = :target_date, valid_to = r -> r.target_date + Day(1),
-    ts = r -> DateTime(r.issued_on),
+    effective_from = :target_date, effective_to = r -> r.target_date + Day(1),
+    asserted_at = r -> DateTime(r.issued_on),
 )
 function read_snapshot(s)
-    snap = snapshot(s; valid_at = Date(2026, 6, 2), tx_at = DateTime(2026, 5, 30))
+    snap = snapshot(s; effective_at = Date(2026, 6, 2), assertive_at = DateTime(2026, 5, 30))
     return sort(collect(zip(snap.entity, snap.value)))
 end
 
