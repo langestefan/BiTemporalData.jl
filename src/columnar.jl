@@ -43,8 +43,9 @@ function _value_at(s::ColumnarStore{K, V}, key, valid_at::DateTime, tx_at::DateT
     rows === nothing && return nothing
     best = 0
     for i in rows
+        # `>=` so a later write at the same tx_from wins the tie (append order; T6).
         if s.tx_from[i] <= tx_at < s.tx_to[i] && s.valid_from[i] <= valid_at < s.valid_to[i] &&
-                (best == 0 || s.tx_from[i] > s.tx_from[best])
+                (best == 0 || s.tx_from[i] >= s.tx_from[best])
             best = i
         end
     end
@@ -68,7 +69,9 @@ function close_tx!(s::ColumnarStore, i::Int, ts::DateTime)
     return nothing
 end
 
-entities(s::ColumnarStore) = keys(s.index)
+# Snapshot the keys (not the live `KeySet`): see `entities(::MemoryStore)`. The
+# native `snapshot`/`as_of` below iterate `keys(s.index)` directly, internally.
+entities(s::ColumnarStore) = collect(keys(s.index))
 
 supports_parallel_reads(::ColumnarStore) = true
 
