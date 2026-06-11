@@ -21,9 +21,16 @@ Source layout under `src/` (each `include`d by `BiTemporalData.jl`):
   `MAX_DT` sentinel, the `_instant(::TimeType)` normalizer (a `Date` becomes
   midnight; the TimeZones extension adds a `ZonedDateTime` → UTC method), and the
   internal `_close`/`_overlaps`/`_believed` helpers.
-- `interface.jl`: the four backend primitive declarations.
-- `defaults.jl`: `insert!` (extends `Base.insert!`), `correct!`, `amend!`,
-  `as_of`, `history`, and `load!` (bulk-ingest a Tables.jl source via `correct!`).
+- `interface.jl`: the four backend primitive declarations, plus the optional
+  fifth hook `with_write_tx(f, s)` (run `f()` atomically; no-op default).
+- `defaults.jl`: `insert!` (extends `Base.insert!`, with an opt-in
+  `check_overlap`), `correct!`, `retract!`, `amend!`, `as_of`, `history`, and
+  `load!`. `correct!`/`retract!` share the internal `_close_range!` helper (close
+  overlapping believed records, re-insert the preserved slivers, guard tx
+  ordering); the multi-step writes wrap their body in `with_write_tx`. `_pick`
+  (the single `as_of` selection rule, latest `tx_from` then later write) lives
+  here too. `load!` fetches each key once and maintains the believed set in
+  memory (it no longer calls `correct!` per row).
 - `snapshot.jl`: `snapshot`.
 - `analytical.jl`: `asof_join`, `diff` (extends `Base.diff`), `as_of_batch`, all built
   on `snapshot`/`get_records`. `as_of_batch` has a `threaded=true` mode whose strategy
@@ -58,11 +65,16 @@ The design separates an **abstract store interface** from concrete backends:
 
 - `BitemporalStore{K,V}` (abstract): `K` is the entity key type, `V` the value type.
 - A backend implements **four primitives**: `get_records`, `put_record!`,
-  `close_tx!`, `entities`.
-- All higher-level operations (`insert!`, `correct!`, `amend!`, `as_of`,
-  `history`, `snapshot`) are **default methods on the abstract type** built from
-  those primitives, so every backend gets them for free and may override any one
-  with a faster native path.
+  `close_tx!`, `entities`. `entities` must return a snapshot of the keys
+  (detached from the store), not a live view, so callers can iterate it after a
+  `ThreadSafe` lock is released.
+- All higher-level operations (`insert!`, `correct!`, `retract!`, `amend!`,
+  `as_of`, `history`, `snapshot`) are **default methods on the abstract type**
+  built from those primitives, so every backend gets them for free and may
+  override any one with a faster native path.
+- A backend may also override the optional fifth hook `with_write_tx(f, s)` to
+  make multi-step writes (`correct!`/`amend!`/`retract!`) atomic; the default is
+  a no-op (`f()`). SQLite/DuckDB override it with a real transaction.
 - A backend may also override the `supports_parallel_reads(store)` trait (default
   `false`) to opt into the threaded `as_of_batch` read strategy: `true` means
   concurrent `get_records` is cheap and thread-safe, so queries thread one-per-thread;
@@ -74,8 +86,10 @@ The design separates an **abstract store interface** from concrete backends:
 - `SQLiteStore` is a persistent backend shipped as a **package extension**
   (`[weakdeps]`/`[extensions]` on `SQLite`, plus `Serialization` which SQLite
   loads transitively). It runs the same semantic suite (`test/test-sqlite.jl`), so
-  the suite is the shared correctness check for every backend. New backends follow
-  this pattern: struct in `src/`, primitives in `ext/`.
+  the suite is the shared correctness check for every backend. Like DuckDB it
+  **overrides `snapshot`** with a native window-function query, and overrides
+  `with_write_tx` with a SQLite transaction. New backends follow this pattern:
+  struct in `src/`, primitives in `ext/`.
 - `DuckDBStore` is a persistent, columnar backend shipped as a **package
   extension** (`[weakdeps]`/`[extensions]` on `DuckDB`, plus `Serialization` which
   DuckDB loads transitively). It implements the four primitives and additionally
@@ -85,15 +99,19 @@ The design separates an **abstract store interface** from concrete backends:
   against `MemoryStore`'s.
 - `ThreadSafe(store)` wraps any backend with a store-wide `ReentrantLock`. It
   locks at the **operation** layer (not per-primitive), so multi-primitive writes
-  like `correct!`/`amend!` stay atomic; it delegates each operation to the inner
-  store, whose primitive calls then run inside that one lock. It also passes the
-  full semantic suite, so the suite doubles as its correctness check.
+  like `correct!`/`amend!`/`retract!` and compound reads (`as_of_batch`, `diff`,
+  `load!`) stay atomic against a concurrent writer; it delegates each operation to
+  the inner store, whose primitive calls then run inside that one lock. It also
+  passes the full semantic suite, so the suite doubles as its correctness check.
 
 Key invariants that shape the whole design: records are **append-only** (only
 `tx_to` may be mutated, to close it), all intervals are **half-open `[from, to)`**,
 both axes are **`DateTime`**, and open-ended ranges use the `MAX_DT` sentinel.
 "Currently believed" means `tx_to == MAX_DT`. Public operations accept any
-`TimeType` for valid-time args and normalize through `_instant`.
+`TimeType` for both valid-time and transaction-time args (`tx_at`, `ts`) and
+normalize through `_instant`; transaction time defaults to `now(UTC)`. When two
+records tie on `tx_from`, the later write (append order) wins, consistently
+across `as_of`, `as_of_batch`, and the native SQLite/DuckDB snapshots.
 
 The **snapshot** is the intended read boundary for read-heavy workloads (ML, bulk
 analytics): a single linear pass producing a flat columnar table frozen at a fixed
@@ -147,6 +165,22 @@ TestItemRunner`, and use `@run_package_tests filter=...` to select by name or ta
 Test items are tagged `:unit` (semantics, backends, analytical) or `:quality`
 (`test-quality.jl`: Aqua + JET static analysis); filter on tags to run a subset,
 e.g. `@run_package_tests filter = ti -> :quality in ti.tags`.
+
+`benchmark/benchmarks.jl` defines an
+[AirspeedVelocity.jl](https://github.com/MilesCranmer/AirspeedVelocity.jl) `SUITE`
+covering the two headline read paths (`snapshot` and `as_of_batch`) across the
+backends. The `Benchmark.yml` workflow runs it on PRs and posts a `main`-vs-PR
+comparison comment (times reported in ms). Run locally either via the driver or
+directly in the workspace:
+
+```bash
+julia -e 'using Pkg; Pkg.add("AirspeedVelocity")'   # provides `benchpkg`
+benchpkg BiTemporalData --rev=main,dirty --bench-on=dirty
+```
+
+```julia
+using BenchmarkTools; include("benchmark/benchmarks.jl"); run(SUITE)
+```
 
 ## Linting & formatting
 

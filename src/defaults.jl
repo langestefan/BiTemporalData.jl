@@ -140,9 +140,9 @@ function load!(s::BitemporalStore{K, V}, table; key, value, valid_from, ts, vali
     # Materialize once, normalizing key and time types up front.
     obs = [
         (
-            key = convert(K, kf(r)), value = valf(r),
-            vf = _instant(vff(r)), vt = _instant(vtf(r)), ts = _instant(tf(r)),
-        ) for r in rows(table)
+                key = convert(K, kf(r)), value = valf(r),
+                vf = _instant(vff(r)), vt = _instant(vtf(r)), ts = _instant(tf(r)),
+            ) for r in rows(table)
     ]
     # Stable sort so ties on `ts` keep source order (the later row wins the tie).
     sort!(obs; by = o -> o.ts, alg = Base.Sort.MergeSort)

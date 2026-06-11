@@ -8,6 +8,38 @@ and this project adheres to [Semantic Versioning].
 ## [Unreleased]
 
 - Initial release
+- Transaction-time correctness pass (from a review of the v1 data model):
+  - **(Breaking)** `correct!` now preserves the surrounding belief when it
+    overlaps only part of a record: the slivers outside the corrected range are
+    re-inserted with the old value, so correcting a subrange no longer silently
+    retracts the rest.
+  - **(Breaking)** A close (`correct!`/`amend!`/`retract!`) whose `ts` predates a
+    record's `tx_from` now throws `ArgumentError` instead of creating an inverted
+    transaction interval.
+  - **(Breaking)** Ties on `tx_from` now resolve to the later write (append
+    order) everywhere: `as_of`, `as_of_batch`, and the SQLite/DuckDB native
+    snapshots (`ORDER BY tx_from DESC, id DESC`).
+  - **(Breaking)** `amend!` returns the newly inserted records (was `nothing`).
+  - Transaction-time defaults are now `now(UTC)`, so DST fall-back cannot push
+    `tx_from` backwards. Callers passing explicit `ts` should supply UTC.
+- Add `retract!(s, key; valid_from, valid_to, ts)`: state "we now believe nothing
+  here" over a range, keeping prior beliefs reproducible. Forwarded through
+  `ThreadSafe`.
+- Multi-step writes (`correct!`, `amend!`, `retract!`) now run atomically on
+  transactional backends via the new `with_write_tx` hook: SQLite/DuckDB roll back
+  a half-applied write. `MemoryStore`/`ColumnarStore` keep the no-op default.
+- `tx_at`, `tx_at_old`/`tx_at_new`, the `tx_ats` batch vector, and every `ts`
+  keyword now accept any `TimeType` (a `Date` is taken as midnight).
+- `entities` on the in-memory backends returns a detached snapshot
+  (`collect(keys(...))`), so iterating it through `ThreadSafe` is safe against a
+  concurrent writer; `as_of_batch`, `diff`, and `load!` on a `ThreadSafe` store
+  now run wholly under the lock (consistent point-in-time reads).
+- `insert!` gains an opt-in `check_overlap = true` keyword that rejects a range
+  overlapping a believed record.
+- `SQLiteStore` gets a native window-function `snapshot` (no more N+1 walk), and
+  `load!` fetches each key's records once instead of re-reading per row.
+- Both DB extension constructors reject a `table` name that is not a plain SQL
+  identifier.
 - Add `load!` to bulk-ingest a Tables.jl source (e.g. a `DataFrame` or `CSV.File`)
   into a store, mapping columns to `key`/`value`/`valid_from`/`valid_to`/`ts`.
 - Add a readable `show` for any `BitemporalStore` (summary instead of a full dump).
