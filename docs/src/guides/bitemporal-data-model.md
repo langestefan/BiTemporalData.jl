@@ -5,8 +5,8 @@ block below runs when the docs are built, so the outputs are real.
 
 The core idea: a fact is tracked along **two independent time axes**.
 
-- **Valid time** — when the fact is true *in the world*.
-- **Transaction time** — when the *system* believed it.
+- **Effective time** — when the fact is true *in the world*.
+- **Assertive time** — when the *system* asserted it.
 
 Keeping them separate lets you tell two different kinds of change apart — the
 world changed vs. we changed our mind — and reproduce exactly what was known at
@@ -15,94 +15,94 @@ person's salary.
 
 ## A first fact
 
-Make a store (`String` keys, `Float64` values), record a salary valid from the
-new year, and read it back. `ts` pins the transaction time so the example is
-reproducible; in real code you omit it and it defaults to `now()`.
+Make a store (`String` keys, `Float64` values), record a salary effective from the
+new year, and read it back. `asserted_at` pins the assertive time so the example is
+reproducible; in real code you omit it and it defaults to `now(UTC)`.
 
 ```@example salary
 using BiTemporalData, Dates
 
 store = MemoryStore{String, Float64}()
-insert!(store, "alice", 100.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+insert!(store, "alice", 100.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
 
-as_of(store, "alice"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 2))
+as_of(store, "alice"; effective_at = Date(2024, 6, 1), assertive_at = DateTime(2024, 1, 2))
 ```
 
-[`as_of`](@ref) asks a single question: *what did we believe at `tx_at` was true
-on `valid_at`?*
+[`as_of`](@ref) asks a single question: *what did we assert at `assertive_at` was true
+on `effective_at`?*
 
-## "We were wrong": correcting along transaction time
+## "We were wrong": correcting along assertive time
 
 The 100 was a typo — the real figure is 110. [`correct!`](@ref) supersedes it.
-The old record is **not deleted**; it is closed in transaction time, so an earlier
-`tx_at` still reproduces the old belief.
+The old record is **not deleted**; it is closed in assertive time, so an earlier
+`assertive_at` still reproduces the old assertion.
 
 ```@example salary
-correct!(store, "alice", 110.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 3))
+correct!(store, "alice", 110.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 3))
 
 (
-    believed_before = as_of(store, "alice"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 2)),
-    believed_now = as_of(store, "alice"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 4)),
+    asserted_before = as_of(store, "alice"; effective_at = Date(2024, 6, 1), assertive_at = DateTime(2024, 1, 2)),
+    asserted_now = as_of(store, "alice"; effective_at = Date(2024, 6, 1), assertive_at = DateTime(2024, 1, 4)),
 )
 ```
 
-Same `valid_at`, different `tx_at`, different answer: a correction moves along the
-**transaction** axis.
+Same `effective_at`, different `assertive_at`, different answer: a correction moves along the
+**assertive** axis.
 
-## "The world changed": amending along valid time
+## "The world changed": amending along effective time
 
 Alice gets a raise to 130, effective 1 July — the old figure was *right* for the
 first half of the year. [`amend!`](@ref) splits the timeline: the old value holds
 before the effective date, the new value after.
 
 ```@example salary
-amend!(store, "alice", 130.0; effective = Date(2024, 7, 1), ts = DateTime(2024, 8, 1))
+amend!(store, "alice", 130.0; effective = Date(2024, 7, 1), asserted_at = DateTime(2024, 8, 1))
 
 (
-    spring = as_of(store, "alice"; valid_at = Date(2024, 3, 1), tx_at = DateTime(2024, 8, 2)),
-    autumn = as_of(store, "alice"; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2)),
+    spring = as_of(store, "alice"; effective_at = Date(2024, 3, 1), assertive_at = DateTime(2024, 8, 2)),
+    autumn = as_of(store, "alice"; effective_at = Date(2024, 9, 1), assertive_at = DateTime(2024, 8, 2)),
 )
 ```
 
-Same `tx_at`, different `valid_at`, different answer: an amendment moves along the
-**valid** axis. That contrast — `correct!` on transaction time, `amend!` on valid
-time — is the whole model.
+Same `assertive_at`, different `effective_at`, different answer: an amendment moves along the
+**effective** axis. That contrast — `correct!` on assertive time, `amend!` on
+effective time — is the whole model.
 
 ## The full history
 
 Nothing was overwritten. [`history`](@ref) returns every record ever written for a
-key, including the superseded ones, as a column table. Only `tx_to` ever changes
+key, including the superseded ones, as a column table. Only `assertive_to` ever changes
 (it closes when a record is superseded); everything else is append-only.
 
 ```@example salary
 history(store, "alice")
 ```
 
-A record is "currently believed" when its `tx_to` is still open (the `MAX_DT`
+A record is "currently asserted" when its `assertive_to` is still open (the `MAX_DT`
 sentinel).
 
 ## Reading the whole store: snapshot
 
 For analytics and ML you don't query record by record — you freeze the store at a
-`tx_at` with [`snapshot`](@ref). With a `valid_at`, it collapses to one value per
-entity. Freezing `tx_at` makes the result reproducible and free of look-ahead
+`assertive_at` with [`snapshot`](@ref). With an `effective_at`, it collapses to one value per
+entity. Freezing `assertive_at` makes the result reproducible and free of look-ahead
 leakage.
 
 ```@example salary
-snapshot(store; valid_at = Date(2024, 9, 1), tx_at = DateTime(2024, 8, 2))
+snapshot(store; effective_at = Date(2024, 9, 1), assertive_at = DateTime(2024, 8, 2))
 ```
 
-## Sub-day valid time
+## Sub-day effective time
 
-Valid time is a `DateTime`, so a fact can change intraday — a `Date` is just taken
-as midnight. Here a sensor reading becomes valid at 12:30:
+Effective time is a `DateTime`, so a fact can change intraday — a `Date` is just taken
+as midnight. Here a sensor reading becomes effective at 12:30:
 
 ```@example salary
-insert!(store, "sensor", 21.5; valid_from = DateTime(2024, 1, 1, 12, 30), ts = DateTime(2024, 1, 1))
+insert!(store, "sensor", 21.5; effective_from = DateTime(2024, 1, 1, 12, 30), asserted_at = DateTime(2024, 1, 1))
 
 (
-    at_13_00 = as_of(store, "sensor"; valid_at = DateTime(2024, 1, 1, 13), tx_at = DateTime(2024, 2, 1)),
-    at_12_00 = as_of(store, "sensor"; valid_at = DateTime(2024, 1, 1, 12), tx_at = DateTime(2024, 2, 1)),
+    at_13_00 = as_of(store, "sensor"; effective_at = DateTime(2024, 1, 1, 13), assertive_at = DateTime(2024, 2, 1)),
+    at_12_00 = as_of(store, "sensor"; effective_at = DateTime(2024, 1, 1, 12), assertive_at = DateTime(2024, 2, 1)),
 )
 ```
 
