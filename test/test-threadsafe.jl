@@ -40,6 +40,12 @@ end
 
     # with_write_tx on the wrapper forwards to the inner store and returns f()'s value.
     @test with_write_tx(() -> 42, s) == 42
+
+    # The wrapper also forwards the raw interface primitives.
+    stored = put_record!(s, "B", Record{Float64}(nothing, 9.0, DateTime(2024, 1, 1), MAX_DT, DateTime(2024, 1, 1), MAX_DT))
+    @test get_records(s, "B")[1].value == 9.0
+    close_tx!(s, stored.id, DateTime(2024, 1, 2))
+    @test get_records(s, "B")[1].tx_to == DateTime(2024, 1, 2)
 end
 
 @testitem "ThreadSafe entities is safe to iterate under a concurrent writer" tags = [:unit] begin
