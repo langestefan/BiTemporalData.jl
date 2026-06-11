@@ -8,6 +8,10 @@ Inner-join two stores on `entity` at one `(valid_at, tx_at)` point. The stores
 must share the key type `K`. Columns `entity`, `a`, `b`, with one row per entity
 that has a value in both stores at that point (entities in only one store are
 dropped). Tables.jl-compatible.
+
+Reads each store with its own `snapshot`, so wrapping the inputs in
+[`ThreadSafe`](@ref) makes each snapshot atomic but not the join as a whole: a
+join across two concurrently-written stores is not a single point-in-time read.
 """
 function asof_join(
         a::BitemporalStore{K, Va}, b::BitemporalStore{K, Vb};
@@ -88,18 +92,6 @@ backends over a single mutable connection (`SQLiteStore`, `DuckDBStore`) keep th
 uses, so a new backend only overrides it when concurrent `get_records` is safe.
 """
 supports_parallel_reads(::BitemporalStore) = false
-
-# The as_of pick for one query: latest `tx_from` among records covering both.
-function _pick(recs, valid_at::DateTime, tx_at::DateTime)
-    best = nothing
-    for r in recs
-        if r.tx_from <= tx_at < r.tx_to && r.valid_from <= valid_at < r.valid_to &&
-                (best === nothing || r.tx_from > best.tx_from)
-            best = r
-        end
-    end
-    return best === nothing ? nothing : best.value
-end
 
 """
     as_of_batch(s, keys, valid_ats, tx_ats; threaded = false) -> Vector{Union{V,Nothing}}

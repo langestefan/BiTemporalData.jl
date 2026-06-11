@@ -199,5 +199,17 @@
             @test as_of(s, "A"; valid_at = Date(2024, 6, 1), tx_at = T2) == 1.0
             @test length(history(s, "A").value) == 1
         end
+
+        @testset "13. Ties on tx_from resolve to the later write" begin
+            s = make_store()
+            insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = T1)
+            insert!(s, "A", 2.0; valid_from = Date(2024, 1, 1), ts = T1)   # same ts, overlaps
+            # The later write at the same tx_from wins (append order).
+            @test as_of(s, "A"; valid_at = Date(2024, 6, 1), tx_at = T1) == 2.0
+            # The same rule through the (possibly native) snapshot cross-section.
+            cross = snapshot(s; valid_at = Date(2024, 6, 1), tx_at = T1)
+            i = findfirst(==("A"), cross.entity)
+            @test cross.value[i] == 2.0
+        end
     end
 end

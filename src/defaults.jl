@@ -157,23 +157,34 @@ function amend!(
     end
 end
 
+# The as_of pick for one query: among the records whose belief at `tx_at` covers
+# `valid_at`, the one with the maximal `tx_from`. `>=` breaks ties by append order
+# (the later write at the same instant wins; see T6), and is the single source of
+# the selection rule shared by `as_of` and `as_of_batch`.
+function _pick(recs, valid_at::DateTime, tx_at::DateTime)
+    best = nothing
+    for r in recs
+        if r.tx_from <= tx_at < r.tx_to && r.valid_from <= valid_at < r.valid_to &&
+                (best === nothing || r.tx_from >= best.tx_from)
+            best = r
+        end
+    end
+    return best === nothing ? nothing : best.value
+end
+
 """
     as_of(s, key; valid_at = now(UTC), tx_at = now(UTC)) -> Union{V,Nothing}
 
 The value believed at `tx_at` to hold at `valid_at`, or `nothing`. `valid_at`
-accepts any `TimeType` (a `Date` is taken as midnight).
+accepts any `TimeType` (a `Date` is taken as midnight). When more than one record
+is believed over `valid_at` at `tx_at`, the one with the latest `tx_from` wins,
+and a tie on `tx_from` resolves to the later write (append order).
 """
 function as_of(
         s::BitemporalStore{K, V}, key;
         valid_at::TimeType = now(UTC), tx_at::DateTime = now(UTC),
     ) where {K, V}
-    va = _instant(valid_at)
-    hits = [
-        r for r in get_records(s, key)
-            if r.tx_from <= tx_at < r.tx_to && r.valid_from <= va < r.valid_to
-    ]
-    isempty(hits) && return nothing
-    return argmax(r -> r.tx_from, hits).value
+    return _pick(get_records(s, key), _instant(valid_at), tx_at)
 end
 
 """
