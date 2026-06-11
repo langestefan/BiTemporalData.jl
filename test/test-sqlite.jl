@@ -60,3 +60,15 @@ end
 
     SemanticSuite.run_semantic_suite(() -> ThreadSafe(SQLiteStore{String, Float64}(":memory:")))
 end
+
+@testitem "SQLiteStore rejects an invalid table name" tags = [:unit] begin
+    using BiTemporalData
+    using SQLite
+
+    # `table` is interpolated into SQL, so a non-identifier is rejected.
+    @test_throws ArgumentError SQLiteStore{String, Float64}(":memory:"; table = "bad name")
+    @test_throws ArgumentError SQLiteStore{String, Float64}(":memory:"; table = "x; DROP TABLE y")
+    @test_throws ArgumentError SQLiteStore{String, Float64}(":memory:"; table = "1abc")
+    # A plain identifier is accepted.
+    @test SQLiteStore{String, Float64}(":memory:"; table = "my_records") isa SQLiteStore
+end
