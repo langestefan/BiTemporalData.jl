@@ -62,8 +62,7 @@ DBInterface.close!(store.db)
 
 using Base.Threads
 
-# Keep a handle to the inner store so we can close its connection at the end
-# without reaching into the ThreadSafe wrapper's internals.
+# Keep a handle to the inner store so we can close its connection at the end.
 store = SQLiteStore{String, Float64}(dbfile)
 safe = ThreadSafe(store)
 

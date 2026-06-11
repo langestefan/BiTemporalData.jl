@@ -1,9 +1,7 @@
 # See https://docs.codecov.com/docs/codecovyml-reference for details
 
-# The test workflow uploads coverage from two Julia versions (lts + latest),
-# each tagged with a `julia-<version>` flag. Wait for both before computing
-# statuses so version-gated code (e.g. the 1.11+ Base.Lockable path vs the 1.10
-# fallback in ThreadSafe) is judged on the union, not a single version.
+# Coverage is uploaded from two Julia versions (lts + latest); wait for both so
+# version-gated code is judged on the union, not a single version.
 codecov:
   notify:
     after_n_builds: 2
