@@ -211,5 +211,20 @@
             i = findfirst(==("A"), cross.entity)
             @test cross.value[i] == 2.0
         end
+
+        @testset "14. insert! check_overlap rejects an overlapping range" begin
+            s = make_store()
+            insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), valid_to = Date(2024, 6, 1), ts = T1)
+            # With the opt-in check, an overlapping insert is rejected.
+            @test_throws ArgumentError insert!(
+                s, "A", 2.0; valid_from = Date(2024, 3, 1), ts = T2, check_overlap = true,
+            )
+            # A non-overlapping insert passes the check.
+            insert!(s, "A", 3.0; valid_from = Date(2024, 6, 1), ts = T2, check_overlap = true)
+            @test as_of(s, "A"; valid_at = Date(2024, 7, 1), tx_at = T2) == 3.0
+            # The default (no check) still allows an overlap.
+            insert!(s, "A", 9.0; valid_from = Date(2024, 1, 1), ts = T3)
+            @test length(history(s, "A").value) == 3
+        end
     end
 end

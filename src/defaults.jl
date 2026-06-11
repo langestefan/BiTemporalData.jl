@@ -9,22 +9,34 @@ function _check_range(valid_from::DateTime, valid_to::DateTime)
 end
 
 """
-    insert!(s, key, value; valid_from, valid_to = MAX_DT, ts = now(UTC))
+    insert!(s, key, value; valid_from, valid_to = MAX_DT, ts = now(UTC), check_overlap = false)
 
 Record a new fact over `[valid_from, valid_to)`. `valid_from`/`valid_to` accept any
 `TimeType` (a `Date` is taken as midnight). Returns the stored [`Record`](@ref).
 
-`insert!` does not check for overlap with an existing believed record: two
-overlapping current beliefs both stand, and a read resolves them by the
+By default `insert!` does not check for overlap with an existing believed record:
+two overlapping current beliefs both stand, and a read resolves them by the
 [`as_of`](@ref) tie rule (latest `tx_from`, then the later write). To re-state a
-fact, use [`correct!`](@ref), which closes the prior belief first.
+fact, use [`correct!`](@ref), which closes the prior belief first. Pass
+`check_overlap = true` to instead reject an `insert!` that overlaps a believed
+record (it points you at `correct!`).
 """
 function Base.insert!(
         s::BitemporalStore{K, V}, key, value;
         valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::TimeType = now(UTC),
+        check_overlap::Bool = false,
     ) where {K, V}
     vf, vt, t = _instant(valid_from), _instant(valid_to), _instant(ts)
     _check_range(vf, vt)
+    if check_overlap
+        for r in get_records(s, key)
+            _believed(r) && _overlaps(r.valid_from, r.valid_to, vf, vt) && throw(
+                ArgumentError(
+                    "insert! range [$vf, $vt) overlaps a believed record for key $(repr(key)); use correct! to re-state",
+                ),
+            )
+        end
+    end
     return put_record!(s, key, Record{V}(nothing, value, vf, vt, t, MAX_DT))
 end
 
