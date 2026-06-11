@@ -62,10 +62,12 @@ end
 
     function histset(s, k)
         h = history(s, k)
-        return sort([
-            (h.value[i], h.valid_from[i], h.valid_to[i], h.tx_from[i], h.tx_to[i])
-                for i in eachindex(h.value)
-        ])
+        return sort(
+            [
+                (h.value[i], h.valid_from[i], h.valid_to[i], h.tx_from[i], h.tx_to[i])
+                    for i in eachindex(h.value)
+            ]
+        )
     end
 
     backends = (

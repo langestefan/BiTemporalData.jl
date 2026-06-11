@@ -55,7 +55,8 @@ using Pkg; Pkg.add(url = "https://github.com/langestefan/BiTemporalData.jl")
 ## Quick start
 
 `ts` pins the transaction time for reproducible examples; omit it and it defaults
-to `now()`.
+to `now(UTC)` (transaction time is UTC by convention, so it never goes backwards
+across a DST boundary).
 
 A read picks one point on each axis. `valid_at` is the world date you ask about;
 `tx_at` is the belief you want, i.e. as of when the system knew it. Either can be
@@ -92,6 +93,21 @@ as_of(store, "AAPL"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 4))
 # 110.0  (now)
 as_of(store, "AAPL"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 2))
 # 100.0  (before)
+```
+
+Correcting only part of a record preserves the rest: the belief outside the
+corrected range is kept (the surrounding slivers are re-inserted with the old
+value), so a subrange correction never silently drops the surrounding belief.
+
+To state that *no* value holds over a range (rather than a replacement value),
+use `retract!`; the prior belief stays reproducible at an earlier `tx_at`.
+
+```julia
+retract!(store, "AAPL"; valid_from = Date(2024, 1, 1), valid_to = Date(2024, 2, 1),
+         ts = DateTime(2024, 1, 5))
+
+as_of(store, "AAPL"; valid_at = Date(2024, 1, 15), tx_at = DateTime(2024, 1, 6))
+# nothing  (retracted)
 ```
 
 ### Amend: the world changed
@@ -139,6 +155,7 @@ column table.
 | `load!`       | Bulk-ingest a Tables.jl source (`DataFrame`, `CSV.File`)      |
 | `insert!`     | Record a new fact over a valid range                          |
 | `correct!`    | Supersede a value we now believe was wrong (history kept)     |
+| `retract!`    | State that no value holds over a range (history kept)         |
 | `amend!`      | Split the timeline when the world changes on a date           |
 | `as_of`       | Read the value believed at `tx_at` to hold at `valid_at`      |
 | `history`     | Full audit trail for a key                                    |
@@ -164,9 +181,11 @@ duck = DuckDBStore{String, Float64}("data.duckdb")
 safe = ThreadSafe(mem)                           # wrap any backend for concurrency
 ```
 
-`ThreadSafe` serializes whole operations behind one store-wide lock. The
-persistent backends' multi-step writes (`correct!`, `amend!`) are not atomic
-across a crash, same as `MemoryStore`.
+`ThreadSafe` serializes whole operations behind one store-wide lock, so
+multi-primitive writes and compound reads (`as_of_batch`, `diff`, `load!`) cannot
+interleave with a concurrent writer. On the persistent backends, multi-step
+writes (`correct!`, `amend!`, `retract!`) run inside a SQLite/DuckDB transaction,
+so a crash mid-write rolls back rather than leaving the file half-updated.
 
 The data model is defined against an abstract `BitemporalStore` interface (four
 primitives: `get_records`, `put_record!`, `close_tx!`, `entities`), so new
