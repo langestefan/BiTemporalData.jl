@@ -31,7 +31,8 @@ retract!(t::ThreadSafe, key; kw...) =
 as_of(t::ThreadSafe, key; kw...) = lock(() -> as_of(t.store, key; kw...), t.lock)
 history(t::ThreadSafe, key) = lock(() -> history(t.store, key), t.lock)
 snapshot(t::ThreadSafe; kw...) = lock(() -> snapshot(t.store; kw...), t.lock)
-load!(t::ThreadSafe, table; kw...) = lock(() -> load!(t.store, table; kw...), t.lock)
+# Return the wrapper, not the inner store, so callers keep the locked handle.
+load!(t::ThreadSafe, table; kw...) = (lock(() -> load!(t.store, table; kw...), t.lock); t)
 
 # Compound reads run wholly under the lock, so they are a single consistent
 # point-in-time read against concurrent writers. Threading the inner batch would

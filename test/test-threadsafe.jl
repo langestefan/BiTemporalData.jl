@@ -24,6 +24,24 @@ end
     @test length(collect(entities(distinct))) == n
 end
 
+@testitem "ThreadSafe forwards load!, supports_parallel_reads, with_write_tx" tags = [:unit] begin
+    using BiTemporalData
+    using Dates
+
+    s = ThreadSafe(MemoryStore{String, Float64}())
+
+    # load! through the wrapper returns the wrapper and ingests under the lock.
+    table = [(k = "A", v = 1.0, d = Date(2024, 1, 1), t = DateTime(2024, 1, 1))]
+    @test load!(s, table; key = :k, value = :v, valid_from = :d, ts = :t) === s
+    @test as_of(s, "A"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 2, 1)) == 1.0
+
+    # A wrapped store never threads its own reads.
+    @test supports_parallel_reads(s) == false
+
+    # with_write_tx on the wrapper forwards to the inner store and returns f()'s value.
+    @test with_write_tx(() -> 42, s) == 42
+end
+
 @testitem "ThreadSafe entities is safe to iterate under a concurrent writer" tags = [:unit] begin
     using BiTemporalData
     using Dates
