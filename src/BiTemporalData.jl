@@ -21,7 +21,8 @@ export BitemporalStore, ColumnarStore,
     DuckDBStore, MAX_DT, MemoryStore, Record, SQLiteStore, ThreadSafe
 
 # Default operations (insert! and diff extend Base, so they are not re-exported)
-export amend!, as_of, as_of_batch, asof_join, correct!, history, load!, snapshot
+export amend!, as_of, as_of_batch, asof_join, correct!, history, load!, retract!,
+    snapshot
 
 # Backend primitives and traits (for authors of new backends)
 export close_tx!, entities, get_records, put_record!, supports_parallel_reads,

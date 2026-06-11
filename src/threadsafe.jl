@@ -21,6 +21,8 @@ correct!(t::ThreadSafe, key, value; kw...) =
     lock(() -> correct!(t.store, key, value; kw...), t.lock)
 amend!(t::ThreadSafe, key, value; kw...) =
     lock(() -> amend!(t.store, key, value; kw...), t.lock)
+retract!(t::ThreadSafe, key; kw...) =
+    lock(() -> retract!(t.store, key; kw...), t.lock)
 as_of(t::ThreadSafe, key; kw...) = lock(() -> as_of(t.store, key; kw...), t.lock)
 history(t::ThreadSafe, key) = lock(() -> history(t.store, key), t.lock)
 snapshot(t::ThreadSafe; kw...) = lock(() -> snapshot(t.store; kw...), t.lock)
