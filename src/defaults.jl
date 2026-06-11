@@ -113,14 +113,60 @@ _accessor(spec) = Returns(spec)
 Bulk-load bitemporal observations from any [Tables.jl](https://github.com/JuliaData/Tables.jl)
 source (a `DataFrame`, `CSV.File`, vector of `NamedTuple`s, ...). Each mapping is a
 column-name `Symbol`, a `row -> value` function (for computed columns), or a
-constant. Rows are processed in ascending `ts` order and each is recorded with
-[`correct!`](@ref), so repeated observations of the same key and valid range chain
-together in transaction time. Returns `s`.
+constant. Rows are applied in ascending `ts` order (ties keep source order) with
+the same close/sliver/insert semantics as [`correct!`](@ref), so repeated
+observations of the same key and valid range chain together in transaction time.
+Returns `s`.
+
+Each key's records are fetched once and the believed set is maintained in memory
+while its rows are applied, so loading N observations of one key costs one read
+instead of N (the per-row `correct!` path re-read on every row). Each key's writes
+run in one [`with_write_tx`](@ref).
 """
-function load!(s::BitemporalStore, table; key, value, valid_from, ts, valid_to = MAX_DT)
-    k, v, vf, vt, t = _accessor.((key, value, valid_from, valid_to, ts))
-    for r in sort(collect(rows(table)); by = t)
-        correct!(s, k(r), v(r); valid_from = vf(r), valid_to = vt(r), ts = t(r))
+function load!(s::BitemporalStore{K, V}, table; key, value, valid_from, ts, valid_to = MAX_DT) where {K, V}
+    kf, valf, vff, vtf, tf = _accessor.((key, value, valid_from, valid_to, ts))
+    # Materialize once, normalizing key and time types up front.
+    obs = [
+        (
+            key = convert(K, kf(r)), value = valf(r),
+            vf = _instant(vff(r)), vt = _instant(vtf(r)), ts = _instant(tf(r)),
+        ) for r in rows(table)
+    ]
+    # Stable sort so ties on `ts` keep source order (the later row wins the tie).
+    sort!(obs; by = o -> o.ts, alg = Base.Sort.MergeSort)
+    # Group by key, preserving first-seen order for deterministic output.
+    order = K[]
+    bykey = Dict{K, Vector{eltype(obs)}}()
+    for o in obs
+        haskey(bykey, o.key) || push!(order, o.key)
+        push!(get!(() -> eltype(obs)[], bykey, o.key), o)
+    end
+    for key in order
+        with_write_tx(s) do
+            believed = filter(_believed, get_records(s, key))
+            for o in bykey[key]
+                _check_range(o.vf, o.vt)
+                remaining = Record{V}[]
+                for r in believed
+                    if _overlaps(r.valid_from, r.valid_to, o.vf, o.vt)
+                        o.ts >= r.tx_from || throw(
+                            ArgumentError(
+                                "ts ($(o.ts)) predates the record's tx_from ($(r.tx_from)); transaction time is append-only",
+                            ),
+                        )
+                        close_tx!(s, r.id, o.ts)
+                        r.valid_from < o.vf &&
+                            push!(remaining, put_record!(s, key, Record{V}(nothing, r.value, r.valid_from, o.vf, o.ts, MAX_DT)))
+                        o.vt < r.valid_to &&
+                            push!(remaining, put_record!(s, key, Record{V}(nothing, r.value, o.vt, r.valid_to, o.ts, MAX_DT)))
+                    else
+                        push!(remaining, r)   # untouched belief carries forward
+                    end
+                end
+                push!(remaining, put_record!(s, key, Record{V}(nothing, o.value, o.vf, o.vt, o.ts, MAX_DT)))
+                believed = remaining
+            end
+        end
     end
     return s
 end

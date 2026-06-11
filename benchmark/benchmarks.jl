@@ -21,7 +21,7 @@ over queries).
 
 using BenchmarkTools
 using BiTemporalData
-using Dates: Date, DateTime
+using Dates: Date, DateTime, Day
 using Random: MersenneTwister
 using SQLite, DuckDB
 
@@ -65,6 +65,23 @@ for (name, make) in BACKENDS
     SUITE["snapshot"][name]["full"] = @benchmarkable snapshot($s; tx_at = $(TX[3]))
     SUITE["snapshot"][name]["cross"] =
         @benchmarkable snapshot($s; valid_at = $READ_VALID, tx_at = $(TX[3]))
+end
+
+# `load!`: 1000 vintages of a single key, the case T13 batched: fetch the key's
+# records once and maintain the believed set in memory, instead of the per-row
+# correct! path re-reading all of them on every row (O(N^2) reads).
+SUITE["load"] = BenchmarkGroup()
+let
+    table = [
+        (k = "e1", v = float(i), d = VALID_FROM, t = DateTime(2024, 1, 1) + Day(i))
+            for i in 1:1_000
+    ]
+    for (name, make) in BACKENDS
+        SUITE["load"][name]["single_key_1k"] = @benchmarkable(
+            load!(s, $table; key = :k, value = :v, valid_from = :d, ts = :t),
+            setup = (s = $make()),
+        )
+    end
 end
 
 # `as_of_batch`: serial vs threaded for the in-memory backends, whose
