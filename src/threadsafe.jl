@@ -47,7 +47,9 @@ Base.diff(t::ThreadSafe; kw...) = lock(() -> diff(t.store; kw...), t.lock)
 
 # A wrapped store never threads its own reads: one operation runs at a time,
 # store-wide, so concurrent get_records never happens (make it explicit).
-supports_parallel_reads(::ThreadSafe) = false
+function supports_parallel_reads(::ThreadSafe)
+    return false
+end
 
 # Primitives forwarded so the wrapper fully implements the interface. Operations
 # above call `t.store` directly, so they never route through these.
