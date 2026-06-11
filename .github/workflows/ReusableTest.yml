@@ -49,4 +49,10 @@ jobs:
         if: ${{ inputs.run_codecov }}
         with:
           file: lcov.info
+          # Tag the upload with the Julia version so Codecov keeps each version's
+          # report and unions them, instead of the later upload overwriting the
+          # earlier. This is what lets version-gated code (the 1.11+ Base.Lockable
+          # path vs the 1.10 fallback) count as covered: each branch is exercised
+          # on the Julia that compiles it.
+          flags: julia-${{ inputs.version }}
           token: ${{ secrets.codecov_token }}
