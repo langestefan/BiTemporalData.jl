@@ -42,3 +42,49 @@
     # Empty source is a no-op.
     @test isempty(entities(load!(MemoryStore{Int, Int}(), NamedTuple[]; key = :k, value = :v, valid_from = :f, ts = :t)))
 end
+
+@testitem "load! matches a per-row correct! loop on a messy table" tags = [:unit] begin
+    using BiTemporalData
+    using SQLite, DuckDB
+    using Dates
+
+    # Deterministic pseudo-random table: 5 keys, overlapping ranges, out-of-order
+    # and duplicate ts. load! (fetch-once, in-memory believed set) must produce
+    # byte-identical history to applying correct! per row in stable ts order.
+    table = NamedTuple[]
+    for i in 1:200
+        k = "k$(mod1(i * 7, 5))"
+        vf = Date(2024, mod1(i * 13, 11), mod1(i * 17, 28))
+        vt = vf + Day(mod1(i * 11, 120))
+        tsd = DateTime(2024, 1, 1) + Day(mod1(i * 5, 40))   # duplicates + out of order
+        push!(table, (key = k, value = float(mod1(i * 3, 100)), vf = vf, vt = vt, ts = tsd))
+    end
+
+    function histset(s, k)
+        h = history(s, k)
+        return sort([
+            (h.value[i], h.valid_from[i], h.valid_to[i], h.tx_from[i], h.tx_to[i])
+                for i in eachindex(h.value)
+        ])
+    end
+
+    backends = (
+        () -> MemoryStore{String, Float64}(),
+        () -> ColumnarStore{String, Float64}(),
+        () -> SQLiteStore{String, Float64}(":memory:"),
+        () -> DuckDBStore{String, Float64}(":memory:"),
+    )
+    for make in backends
+        loaded = make()
+        load!(loaded, table; key = :key, value = :value, valid_from = :vf, valid_to = :vt, ts = :ts)
+
+        ref = make()
+        for r in sort(table; by = r -> r.ts, alg = Base.Sort.MergeSort)
+            correct!(ref, r.key, r.value; valid_from = r.vf, valid_to = r.vt, ts = r.ts)
+        end
+
+        for k in ["k1", "k2", "k3", "k4", "k5"]
+            @test histset(loaded, k) == histset(ref, k)
+        end
+    end
+end
