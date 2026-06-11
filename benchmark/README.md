@@ -7,7 +7,7 @@ PR comment.
 
 It covers the two headline read paths:
 
-- `snapshot`, full tx-slice and collapsed cross-section, across every backend (the
+- `snapshot`, full assertive-slice and collapsed cross-section, across every backend (the
   ML / bulk-analytics read boundary).
 - `as_of_batch`, serial vs threaded, for the in-memory backends, where the
   `supports_parallel_reads` strategy threads straight over the queries.

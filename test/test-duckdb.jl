@@ -18,18 +18,18 @@ end
         path = joinpath(dir, "store.duckdb")
 
         s = DuckDBStore{String, Float64}(path)
-        insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1, 9))
-        correct!(s, "A", 2.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 2, 9))
+        insert!(s, "A", 1.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1, 9))
+        correct!(s, "A", 2.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 2, 9))
         release(s)
 
         # Reopen the same file: data and the bitemporal history survive.
         s2 = DuckDBStore{String, Float64}(path)
-        @test as_of(s2, "A"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 2, 9)) == 2.0
-        @test as_of(s2, "A"; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 1, 1, 9)) == 1.0
+        @test as_of(s2, "A"; effective_at = Date(2024, 6, 1), assertive_at = DateTime(2024, 1, 2, 9)) == 2.0
+        @test as_of(s2, "A"; effective_at = Date(2024, 6, 1), assertive_at = DateTime(2024, 1, 1, 9)) == 1.0
         h = history(s2, "A")
         @test h.value == [1.0, 2.0]
-        @test h.tx_to[1] == DateTime(2024, 1, 2, 9)
-        @test h.tx_to[2] == MAX_DT
+        @test h.assertive_to[1] == DateTime(2024, 1, 2, 9)
+        @test h.assertive_to[2] == MAX_DT
         release(s2)
     end
 end
@@ -40,9 +40,9 @@ end
     using Dates
 
     s = DuckDBStore{String, Float64}(":memory:")
-    insert!(s, "Amsterdam", 1.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+    insert!(s, "Amsterdam", 1.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
     sub = SubString("xAmsterdamx", 2, 10)   # == "Amsterdam", but not a String
-    @test as_of(s, sub; valid_at = Date(2024, 6, 1), tx_at = DateTime(2024, 2, 1)) == 1.0
+    @test as_of(s, sub; effective_at = Date(2024, 6, 1), assertive_at = DateTime(2024, 2, 1)) == 1.0
     @test collect(entities(s)) == ["Amsterdam"]
 end
 
@@ -55,10 +55,10 @@ end
     # DuckDB `snapshot` against the reference `MemoryStore` one (both modes).
     function build(make)
         s = make()
-        insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
-        insert!(s, "B", 5.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
-        correct!(s, "A", 2.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 3))
-        amend!(s, "A", 9.0; effective = Date(2024, 7, 1), ts = DateTime(2024, 1, 4))
+        insert!(s, "A", 1.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
+        insert!(s, "B", 5.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
+        correct!(s, "A", 2.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 3))
+        amend!(s, "A", 9.0; effective = Date(2024, 7, 1), asserted_at = DateTime(2024, 1, 4))
         return s
     end
     mem = build(() -> MemoryStore{String, Float64}())
@@ -68,10 +68,10 @@ end
     rowset(nt) = Set(Tuple(col[i] for col in values(nt)) for i in eachindex(first(nt)))
 
     for txa in (DateTime(2024, 1, 2), DateTime(2024, 1, 5))
-        @test rowset(snapshot(duck; tx_at = txa)) == rowset(snapshot(mem; tx_at = txa))
+        @test rowset(snapshot(duck; assertive_at = txa)) == rowset(snapshot(mem; assertive_at = txa))
         for va in (Date(2024, 3, 1), Date(2024, 9, 1))
-            @test rowset(snapshot(duck; valid_at = va, tx_at = txa)) ==
-                rowset(snapshot(mem; valid_at = va, tx_at = txa))
+            @test rowset(snapshot(duck; effective_at = va, assertive_at = txa)) ==
+                rowset(snapshot(mem; effective_at = va, assertive_at = txa))
         end
     end
 end

@@ -19,7 +19,7 @@ function Base.show(io::IO, ::MIME"text/plain", s::BitemporalStore{K, V}) where {
     ks = sort!(collect(entities(s)); by = string)
     counts = Tuple{String, Int}[]
     total = 0
-    believed = 0
+    asserted = 0
     v_lo = v_hi = nothing
     t_lo = t_hi = nothing
     for k in ks
@@ -27,21 +27,21 @@ function Base.show(io::IO, ::MIME"text/plain", s::BitemporalStore{K, V}) where {
         push!(counts, (string(k), length(rs)))
         for r in rs
             total += 1
-            _believed(r) && (believed += 1)
-            v_lo = v_lo === nothing ? r.valid_from : min(v_lo, r.valid_from)
-            v_hi = v_hi === nothing ? r.valid_from : max(v_hi, r.valid_from)
-            t_lo = t_lo === nothing ? r.tx_from : min(t_lo, r.tx_from)
-            t_hi = t_hi === nothing ? r.tx_from : max(t_hi, r.tx_from)
+            _asserted(r) && (asserted += 1)
+            v_lo = v_lo === nothing ? r.effective_from : min(v_lo, r.effective_from)
+            v_hi = v_hi === nothing ? r.effective_from : max(v_hi, r.effective_from)
+            t_lo = t_lo === nothing ? r.assertive_from : min(t_lo, r.assertive_from)
+            t_hi = t_hi === nothing ? r.assertive_from : max(t_hi, r.assertive_from)
         end
     end
     print(
         io, nameof(typeof(s)), "{", K, ", ", V, "} with ",
         length(ks), length(ks) == 1 ? " entity, " : " entities, ",
-        total, total == 1 ? " record (" : " records (", believed, " currently believed)",
+        total, total == 1 ? " record (" : " records (", asserted, " currently asserted)",
     )
     total == 0 && return
-    print(io, "\n  valid from:  ", v_lo, " to ", v_hi)
-    print(io, "\n  transaction: ", t_lo, " to ", t_hi)
+    print(io, "\n  effective: ", v_lo, " to ", v_hi)
+    print(io, "\n  assertive: ", t_lo, " to ", t_hi)
     width = maximum(length(first(c)) for c in counts)
     cap = 12
     for (i, (name, n)) in enumerate(counts)

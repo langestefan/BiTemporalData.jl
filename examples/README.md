@@ -51,8 +51,8 @@ from the Open-Meteo [Previous Runs API](https://open-meteo.com/en/docs/previous-
 | Column        | Meaning                                                |
 | ------------- | ------------------------------------------------------ |
 | `city`        | City name (the entity key)                             |
-| `target_date` | The day the forecast is *for* (**valid time**)         |
-| `issued_on`   | The day the forecast was *made* (**transaction time**) |
+| `target_date` | The day the forecast is *for* (**effective time**)         |
+| `issued_on`   | The day the forecast was *made* (**assertive time**) |
 | `temp_c`      | Forecast midday temperature, °C                        |
 
 For each target day the API returns the current run plus the forecasts made on
@@ -67,8 +67,8 @@ each of the **7 preceding days**, so every day carries up to 8 forecast vintages
 ## Why weather forecasts fit a bitemporal store
 
 A forecast is the textbook bitemporal record. It is *about* a particular day
-(**valid time**) but is *issued* — and re-issued, with revisions — on particular
-days (**transaction time**). The revisions are inherent to the data: the forecast
+(**effective time**) but is *issued* — and re-issued, with revisions — on particular
+days (**assertive time**). The revisions are inherent to the data: the forecast
 for next Saturday genuinely changes each day as the weekend approaches. So the
 store can answer "what did we think Saturday's temperature would be, as of last
 Monday?" directly, and reconstruct the entire forecast history of any day — with

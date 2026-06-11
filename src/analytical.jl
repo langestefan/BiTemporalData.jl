@@ -2,9 +2,9 @@
 # `BitemporalStore`; a backend may override any one with a faster native path.
 
 """
-    asof_join(a, b; valid_at = now(UTC), tx_at = now(UTC)) -> NamedTuple of column vectors
+    asof_join(a, b; effective_at = now(UTC), assertive_at = now(UTC)) -> NamedTuple of column vectors
 
-Inner-join two stores on `entity` at one `(valid_at, tx_at)` point. The stores
+Inner-join two stores on `entity` at one `(effective_at, assertive_at)` point. The stores
 must share the key type `K`. Columns `entity`, `a`, `b`, with one row per entity
 that has a value in both stores at that point (entities in only one store are
 dropped). Tables.jl-compatible.
@@ -15,10 +15,10 @@ join across two concurrently-written stores is not a single point-in-time read.
 """
 function asof_join(
         a::BitemporalStore{K, Va}, b::BitemporalStore{K, Vb};
-        valid_at::TimeType = now(UTC), tx_at::TimeType = now(UTC),
+        effective_at::TimeType = now(UTC), assertive_at::TimeType = now(UTC),
     ) where {K, Va, Vb}
-    sa = snapshot(a; valid_at, tx_at)
-    sb = snapshot(b; valid_at, tx_at)
+    sa = snapshot(a; effective_at, assertive_at)
+    sb = snapshot(b; effective_at, assertive_at)
     bvals = Dict{K, Vb}(zip(sb.entity, sb.value))
     entity = K[]
     avalue = Va[]
@@ -33,28 +33,28 @@ function asof_join(
 end
 
 """
-    diff(s; tx_at_old, tx_at_new) -> NamedTuple of column vectors
+    diff(s; assertive_at_old, assertive_at_new) -> NamedTuple of column vectors
 
-Records whose currently-believed value changed between two transaction times.
-Columns `entity`, `valid_from`, `valid_to`, `old_value`, `new_value`, `kind`,
-where `kind` is one of `:inserted` (present only at `tx_at_new`), `:retracted`
-(present only at `tx_at_old`), or `:corrected` (same `(entity, valid_from,
-valid_to)`, different value). Unchanged rows are omitted, so the result is empty
+Records whose currently-asserted value changed between two assertive times.
+Columns `entity`, `effective_from`, `effective_to`, `old_value`, `new_value`, `kind`,
+where `kind` is one of `:inserted` (present only at `assertive_at_new`), `:retracted`
+(present only at `assertive_at_old`), or `:corrected` (same `(entity, effective_from,
+effective_to)`, different value). Unchanged rows are omitted, so the result is empty
 iff nothing the store believes changed. Extends `Base.diff`. Tables.jl-compatible.
 """
 function Base.diff(
-        s::BitemporalStore{K, V}; tx_at_old::TimeType, tx_at_new::TimeType,
+        s::BitemporalStore{K, V}; assertive_at_old::TimeType, assertive_at_new::TimeType,
     ) where {K, V}
     asmap(snap) = Dict{Tuple{K, DateTime, DateTime}, V}(
-        (snap.entity[i], snap.valid_from[i], snap.valid_to[i]) => snap.value[i]
+        (snap.entity[i], snap.effective_from[i], snap.effective_to[i]) => snap.value[i]
             for i in eachindex(snap.entity)
     )
-    oldmap = asmap(snapshot(s; tx_at = tx_at_old))
-    newmap = asmap(snapshot(s; tx_at = tx_at_new))
+    oldmap = asmap(snapshot(s; assertive_at = assertive_at_old))
+    newmap = asmap(snapshot(s; assertive_at = assertive_at_new))
 
     entity = K[]
-    valid_from = DateTime[]
-    valid_to = DateTime[]
+    effective_from = DateTime[]
+    effective_to = DateTime[]
     old_value = Union{V, Nothing}[]
     new_value = Union{V, Nothing}[]
     kind = Symbol[]
@@ -70,14 +70,14 @@ function Base.diff(
             ov, nv, kd = oldmap[k], nothing, :retracted
         end
         push!(entity, k[1])
-        push!(valid_from, k[2])
-        push!(valid_to, k[3])
+        push!(effective_from, k[2])
+        push!(effective_to, k[3])
         push!(old_value, ov)
         push!(new_value, nv)
         push!(kind, kd)
     end
     return (
-        entity = entity, valid_from = valid_from, valid_to = valid_to,
+        entity = entity, effective_from = effective_from, effective_to = effective_to,
         old_value = old_value, new_value = new_value, kind = kind,
     )
 end
@@ -94,10 +94,10 @@ uses, so a new backend only overrides it when concurrent `get_records` is safe.
 supports_parallel_reads(::BitemporalStore) = false
 
 """
-    as_of_batch(s, keys, valid_ats, tx_ats; threaded = false) -> Vector{Union{V,Nothing}}
+    as_of_batch(s, keys, effective_ats, assertive_ats; threaded = false) -> Vector{Union{V,Nothing}}
 
-Vectorised [`as_of`](@ref): position `i` holds the value believed at `tx_ats[i]`
-to hold at `valid_ats[i]` for `keys[i]`, or `nothing`. Fetches each key's records
+Vectorised [`as_of`](@ref): position `i` holds the value asserted at `assertive_ats[i]`
+to hold at `effective_ats[i]` for `keys[i]`, or `nothing`. Fetches each key's records
 once instead of per call.
 
 With `threaded = true` the batch is split across threads (running serially when
@@ -108,13 +108,13 @@ scan.
 """
 function as_of_batch(
         s::BitemporalStore{K, V}, keys::Vector{K},
-        valid_ats::Vector{<:TimeType}, tx_ats::Vector{<:TimeType}; threaded::Bool = false,
+        effective_ats::Vector{<:TimeType}, assertive_ats::Vector{<:TimeType}; threaded::Bool = false,
     ) where {K, V}
     n = length(keys)
-    (length(valid_ats) == n && length(tx_ats) == n) ||
-        throw(DimensionMismatch("keys, valid_ats, and tx_ats must have equal length"))
-    valid_dts = _instant.(valid_ats)
-    tx_dts = _instant.(tx_ats)
+    (length(effective_ats) == n && length(assertive_ats) == n) ||
+        throw(DimensionMismatch("keys, effective_ats, and assertive_ats must have equal length"))
+    valid_dts = _instant.(effective_ats)
+    tx_dts = _instant.(assertive_ats)
     if !threaded
         return _batch_grouped(s, keys, valid_dts, tx_dts)
     elseif supports_parallel_reads(s)
@@ -125,7 +125,7 @@ function as_of_batch(
 end
 
 # One `get_records` per distinct key, then scan its queries.
-function _batch_grouped(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K, V}
+function _batch_grouped(s::BitemporalStore{K, V}, keys, effective_ats, assertive_ats) where {K, V}
     result = Vector{Union{V, Nothing}}(undef, length(keys))
     bykey = Dict{K, Vector{Int}}()
     for i in eachindex(keys)
@@ -134,30 +134,30 @@ function _batch_grouped(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where
     for (key, idxs) in bykey
         recs = get_records(s, key)
         for i in idxs
-            result[i] = _pick(recs, valid_ats[i], tx_ats[i])
+            result[i] = _pick(recs, effective_ats[i], assertive_ats[i])
         end
     end
     return result
 end
 
 # Thread over the queries. Only safe when `get_records` is cheap and thread-safe.
-function _batch_flat(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K, V}
+function _batch_flat(s::BitemporalStore{K, V}, keys, effective_ats, assertive_ats) where {K, V}
     result = Vector{Union{V, Nothing}}(undef, length(keys))
     @threads for i in eachindex(keys)
-        result[i] = _pick(get_records(s, keys[i]), valid_ats[i], tx_ats[i])
+        result[i] = _pick(get_records(s, keys[i]), effective_ats[i], assertive_ats[i])
     end
     return result
 end
 
 # Fetch serially (safe on one connection), then thread the scan over the cache.
-function _batch_prefetch(s::BitemporalStore{K, V}, keys, valid_ats, tx_ats) where {K, V}
+function _batch_prefetch(s::BitemporalStore{K, V}, keys, effective_ats, assertive_ats) where {K, V}
     result = Vector{Union{V, Nothing}}(undef, length(keys))
     cache = Dict{K, Vector{Record{V}}}()
     for k in keys
         haskey(cache, k) || (cache[k] = get_records(s, k))
     end
     @threads for i in eachindex(keys)
-        result[i] = _pick(cache[keys[i]], valid_ats[i], tx_ats[i])
+        result[i] = _pick(cache[keys[i]], effective_ats[i], assertive_ats[i])
     end
     return result
 end

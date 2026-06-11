@@ -4,14 +4,14 @@
 
     t = DateTime(2024, 1, 1)
     a = MemoryStore{String, Float64}()
-    insert!(a, "A", 1.0; valid_from = Date(2024, 1, 1), ts = t)
-    insert!(a, "B", 2.0; valid_from = Date(2024, 1, 1), ts = t)
+    insert!(a, "A", 1.0; effective_from = Date(2024, 1, 1), asserted_at = t)
+    insert!(a, "B", 2.0; effective_from = Date(2024, 1, 1), asserted_at = t)
 
     b = MemoryStore{String, Int}()
-    insert!(b, "A", 10; valid_from = Date(2024, 1, 1), ts = t)
-    insert!(b, "C", 30; valid_from = Date(2024, 1, 1), ts = t)
+    insert!(b, "A", 10; effective_from = Date(2024, 1, 1), asserted_at = t)
+    insert!(b, "C", 30; effective_from = Date(2024, 1, 1), asserted_at = t)
 
-    j = asof_join(a, b; valid_at = Date(2024, 6, 1), tx_at = t)
+    j = asof_join(a, b; effective_at = Date(2024, 6, 1), assertive_at = t)
     # Only "A" is present in both stores.
     @test j.entity == ["A"]
     @test j.a == [1.0]
@@ -25,11 +25,11 @@ end
     t1 = DateTime(2024, 1, 1)
     t3 = DateTime(2024, 1, 3)
     s = MemoryStore{String, Float64}()
-    insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = t1)
-    correct!(s, "A", 2.0; valid_from = Date(2024, 1, 1), ts = t3)
-    insert!(s, "B", 5.0; valid_from = Date(2024, 1, 1), ts = t3)
+    insert!(s, "A", 1.0; effective_from = Date(2024, 1, 1), asserted_at = t1)
+    correct!(s, "A", 2.0; effective_from = Date(2024, 1, 1), asserted_at = t3)
+    insert!(s, "B", 5.0; effective_from = Date(2024, 1, 1), asserted_at = t3)
 
-    d = diff(s; tx_at_old = DateTime(2024, 1, 2), tx_at_new = DateTime(2024, 1, 4))
+    d = diff(s; assertive_at_old = DateTime(2024, 1, 2), assertive_at_new = DateTime(2024, 1, 4))
     by = Dict(
         d.entity[i] => (d.kind[i], d.old_value[i], d.new_value[i]) for i in eachindex(d.entity)
     )
@@ -43,10 +43,10 @@ end
     using Dates
 
     s = MemoryStore{String, Float64}()
-    insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
-    amend!(s, "A", 2.0; effective = Date(2024, 6, 1), ts = DateTime(2024, 1, 3))
+    insert!(s, "A", 1.0; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
+    amend!(s, "A", 2.0; effective = Date(2024, 6, 1), asserted_at = DateTime(2024, 1, 3))
 
-    d = diff(s; tx_at_old = DateTime(2024, 1, 2), tx_at_new = DateTime(2024, 1, 4))
+    d = diff(s; assertive_at_old = DateTime(2024, 1, 2), assertive_at_new = DateTime(2024, 1, 4))
     kinds = sort(collect(d.kind); by = string)
     # The original open-ended chapter is retracted; two trimmed chapters inserted.
     @test count(==(:retracted), d.kind) == 1
@@ -61,9 +61,9 @@ end
     t1 = DateTime(2024, 1, 1)
     t3 = DateTime(2024, 1, 3)
     s = MemoryStore{String, Float64}()
-    insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = t1)
-    correct!(s, "A", 2.0; valid_from = Date(2024, 1, 1), ts = t3)
-    insert!(s, "B", 5.0; valid_from = Date(2024, 1, 1), ts = t1)
+    insert!(s, "A", 1.0; effective_from = Date(2024, 1, 1), asserted_at = t1)
+    correct!(s, "A", 2.0; effective_from = Date(2024, 1, 1), asserted_at = t3)
+    insert!(s, "B", 5.0; effective_from = Date(2024, 1, 1), asserted_at = t1)
 
     ks = ["A", "A", "B", "C"]
     was = fill(Date(2024, 6, 1), 4)
@@ -71,7 +71,7 @@ end
 
     r = as_of_batch(s, ks, was, tas)
     @test r == [1.0, 2.0, 5.0, nothing]
-    @test r == [as_of(s, ks[i]; valid_at = was[i], tx_at = tas[i]) for i in eachindex(ks)]
+    @test r == [as_of(s, ks[i]; effective_at = was[i], assertive_at = tas[i]) for i in eachindex(ks)]
     @test r isa Vector{Union{Float64, Nothing}}
 
     @test_throws DimensionMismatch as_of_batch(s, ["A"], [Date(2024, 1, 1)], DateTime[])

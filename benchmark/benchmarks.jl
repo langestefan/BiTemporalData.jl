@@ -34,13 +34,13 @@ const TX = [DateTime(2024, 1, d) for d in 1:3]
 const VALID_FROM = Date(2024, 1, 1)
 const READ_VALID = Date(2024, 6, 1)
 
-# Each entity gets an insert plus two corrections (3 records, one believed now).
+# Each entity gets an insert plus two corrections (3 records, one asserted now).
 function build!(s)
     for i in 1:N
         k = "e$i"
-        insert!(s, k, float(i); valid_from = VALID_FROM, ts = TX[1])
-        correct!(s, k, float(i) + 0.1; valid_from = VALID_FROM, ts = TX[2])
-        correct!(s, k, float(i) + 0.2; valid_from = VALID_FROM, ts = TX[3])
+        insert!(s, k, float(i); effective_from = VALID_FROM, asserted_at = TX[1])
+        correct!(s, k, float(i) + 0.1; effective_from = VALID_FROM, asserted_at = TX[2])
+        correct!(s, k, float(i) + 0.2; effective_from = VALID_FROM, asserted_at = TX[3])
     end
     return s
 end
@@ -58,17 +58,17 @@ function querybatch(q)
     return (["e$(rand(rng, 1:N))" for _ in 1:q], fill(READ_VALID, q), fill(TX[3], q))
 end
 
-# `snapshot`: full tx-slice and collapsed cross-section, for every backend.
+# `snapshot`: full assertive-slice and collapsed cross-section, for every backend.
 SUITE["snapshot"] = BenchmarkGroup()
 for (name, make) in BACKENDS
     s = build!(make())
-    SUITE["snapshot"][name]["full"] = @benchmarkable snapshot($s; tx_at = $(TX[3]))
+    SUITE["snapshot"][name]["full"] = @benchmarkable snapshot($s; assertive_at = $(TX[3]))
     SUITE["snapshot"][name]["cross"] =
-        @benchmarkable snapshot($s; valid_at = $READ_VALID, tx_at = $(TX[3]))
+        @benchmarkable snapshot($s; effective_at = $READ_VALID, assertive_at = $(TX[3]))
 end
 
 # `load!`: 1000 vintages of a single key, the case T13 batched: fetch the key's
-# records once and maintain the believed set in memory, instead of the per-row
+# records once and maintain the asserted set in memory, instead of the per-row
 # correct! path re-reading all of them on every row (O(N^2) reads).
 SUITE["load"] = BenchmarkGroup()
 let
@@ -78,7 +78,7 @@ let
     ]
     for (name, make) in BACKENDS
         SUITE["load"][name]["single_key_1k"] = @benchmarkable(
-            load!(s, $table; key = :k, value = :v, valid_from = :d, ts = :t),
+            load!(s, $table; key = :k, value = :v, effective_from = :d, asserted_at = :t),
             setup = (s = $make()),
         )
     end

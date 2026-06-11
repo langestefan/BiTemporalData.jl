@@ -8,8 +8,8 @@
         s = make()
         for i in 1:50
             k = "e$i"
-            insert!(s, k, float(i); valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
-            correct!(s, k, float(i) + 0.5; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 2))
+            insert!(s, k, float(i); effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 1))
+            correct!(s, k, float(i) + 0.5; effective_from = Date(2024, 1, 1), asserted_at = DateTime(2024, 1, 2))
         end
         return s
     end

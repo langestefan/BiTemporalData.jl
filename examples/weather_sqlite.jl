@@ -21,8 +21,8 @@ isfile(dbfile) && rm(dbfile)
 store = load!(
     SQLiteStore{String, Float64}(dbfile), df;
     key = :city, value = :temp_c,
-    valid_from = :target_date, valid_to = r -> r.target_date + Day(1),
-    ts = r -> DateTime(r.issued_on),
+    effective_from = :target_date, effective_to = r -> r.target_date + Day(1),
+    asserted_at = r -> DateTime(r.issued_on),
 )
 println("Wrote $(nrow(df)) forecasts to $(dbfile)")
 println(store)                     # summary via the store's `show`
@@ -35,21 +35,21 @@ store = SQLiteStore{String, Float64}(dbfile)
 println("\nReopened $(dbfile)")
 
 # How Amsterdam's forecast for 2026-06-02 evolved as the day approached.
-println("\nForecast history for Amsterdam, 2026-06-02 (value, issued = tx_from):")
-println(filter(:valid_from => ==(Date(2026, 6, 2)), DataFrame(history(store, "Amsterdam"))))
+println("\nForecast history for Amsterdam, 2026-06-02 (value, issued = assertive_from):")
+println(filter(:effective_from => ==(Date(2026, 6, 2)), DataFrame(history(store, "Amsterdam"))))
 
 # The same question, asked a week ahead vs the day before.
-week_ahead = as_of(store, "Amsterdam"; valid_at = Date(2026, 6, 2), tx_at = DateTime(2026, 5, 27))
-day_before = as_of(store, "Amsterdam"; valid_at = Date(2026, 6, 2), tx_at = DateTime(2026, 6, 1))
+week_ahead = as_of(store, "Amsterdam"; effective_at = Date(2026, 6, 2), assertive_at = DateTime(2026, 5, 27))
+day_before = as_of(store, "Amsterdam"; effective_at = Date(2026, 6, 2), assertive_at = DateTime(2026, 6, 1))
 println("\nAmsterdam 2026-06-02: forecast a week ahead = $(week_ahead)°C, day before = $(day_before)°C")
 
 # Point-in-time board: every city's forecast for 2026-06-02 as it stood on May 30.
 println("\nForecast board for 2026-06-02, as known on 2026-05-30:")
-println(DataFrame(snapshot(store; valid_at = Date(2026, 6, 2), tx_at = DateTime(2026, 5, 30))))
+println(DataFrame(snapshot(store; effective_at = Date(2026, 6, 2), assertive_at = DateTime(2026, 5, 30))))
 
 # Which forecasts changed between two daily runs.
 println("\nForecasts revised between 2026-05-30 and 2026-06-01:")
-println(DataFrame(diff(store; tx_at_old = DateTime(2026, 5, 30), tx_at_new = DateTime(2026, 6, 1))))
+println(DataFrame(diff(store; assertive_at_old = DateTime(2026, 5, 30), assertive_at_new = DateTime(2026, 6, 1))))
 
 DBInterface.close!(store.db)
 
@@ -74,7 +74,7 @@ queries = [
 ]
 
 # Sum the looked-up temperatures (missing -> 0.0), as one task and as N tasks.
-ask(s, qs) = sum(q -> something(as_of(s, q[1]; valid_at = q[2], tx_at = q[3]), 0.0), qs; init = 0.0)
+ask(s, qs) = sum(q -> something(as_of(s, q[1]; effective_at = q[2], assertive_at = q[3]), 0.0), qs; init = 0.0)
 
 function ask_par(s, qs)
     chunks = Iterators.partition(qs, cld(length(qs), nthreads()))

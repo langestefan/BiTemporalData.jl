@@ -15,14 +15,14 @@ get_records(s::MemoryStore{K, V}, key) where {K, V} = get(() -> Record{V}[], s.r
 
 function put_record!(s::MemoryStore{K, V}, key, r::Record{V}) where {K, V}
     vec = get!(() -> Record{V}[], s.records, key)
-    stored = Record{V}((key, length(vec) + 1), r.value, r.valid_from, r.valid_to, r.tx_from, r.tx_to)
+    stored = Record{V}((key, length(vec) + 1), r.value, r.effective_from, r.effective_to, r.assertive_from, r.assertive_to)
     push!(vec, stored)
     return stored
 end
 
-function close_tx!(s::MemoryStore, (key, idx)::Tuple, ts::DateTime)
+function close_tx!(s::MemoryStore, (key, idx)::Tuple, asserted_at::DateTime)
     r = s.records[key][idx]
-    _believed(r) && (s.records[key][idx] = _close(r, ts))
+    _asserted(r) && (s.records[key][idx] = _close(r, asserted_at))
     return nothing
 end
 
