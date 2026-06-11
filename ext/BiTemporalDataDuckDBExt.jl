@@ -21,9 +21,12 @@ _seq(table) = "$(table)_id_seq"
 # --- constructors ---------------------------------------------------------
 
 function DuckDBStore{K, V}(db::DB; table::AbstractString = "records") where {K, V}
-    # `table` is developer-controlled, so interpolating it is safe; all data is
-    # bound as parameters. DuckDB has no implicit rowid, so `id` is drawn from a
-    # sequence and read back with `RETURNING`.
+    # `table` is interpolated into SQL (no parameter binding for identifiers), so
+    # restrict it to a plain identifier; all data is bound as parameters. DuckDB
+    # has no implicit rowid, so `id` is drawn from a sequence and read back with
+    # `RETURNING`.
+    occursin(r"^[A-Za-z_][A-Za-z0-9_]*$", table) ||
+        throw(ArgumentError("invalid table name $(repr(table)); must match ^[A-Za-z_][A-Za-z0-9_]*\$"))
     execute(db, "CREATE SEQUENCE IF NOT EXISTS $(_seq(table))")
     execute(
         db,
@@ -116,13 +119,14 @@ end
 
 # --- native snapshot ------------------------------------------------------
 # Override the default per-entity walk with one columnar query: the point of a
-# DuckDB backend. Output shape matches the generic `snapshot` exactly.
+# DuckDB backend. The output column *shape* matches the generic `snapshot`; the
+# row order is backend-defined (callers must not rely on it).
 
 function snapshot(
         s::DuckDBStore{K, V};
-        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(UTC),
+        valid_at::Union{TimeType, Nothing} = nothing, tx_at::TimeType = now(UTC),
     ) where {K, V}
-    t = Dates.value(tx_at)
+    t = Dates.value(_instant(tx_at))
     if valid_at === nothing
         ent = K[]
         val = V[]

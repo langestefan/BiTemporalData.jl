@@ -15,7 +15,7 @@ join across two concurrently-written stores is not a single point-in-time read.
 """
 function asof_join(
         a::BitemporalStore{K, Va}, b::BitemporalStore{K, Vb};
-        valid_at::TimeType = now(UTC), tx_at::DateTime = now(UTC),
+        valid_at::TimeType = now(UTC), tx_at::TimeType = now(UTC),
     ) where {K, Va, Vb}
     sa = snapshot(a; valid_at, tx_at)
     sb = snapshot(b; valid_at, tx_at)
@@ -43,7 +43,7 @@ valid_to)`, different value). Unchanged rows are omitted, so the result is empty
 iff nothing the store believes changed. Extends `Base.diff`. Tables.jl-compatible.
 """
 function Base.diff(
-        s::BitemporalStore{K, V}; tx_at_old::DateTime, tx_at_new::DateTime,
+        s::BitemporalStore{K, V}; tx_at_old::TimeType, tx_at_new::TimeType,
     ) where {K, V}
     asmap(snap) = Dict{Tuple{K, DateTime, DateTime}, V}(
         (snap.entity[i], snap.valid_from[i], snap.valid_to[i]) => snap.value[i]
@@ -108,18 +108,19 @@ scan.
 """
 function as_of_batch(
         s::BitemporalStore{K, V}, keys::Vector{K},
-        valid_ats::Vector{<:TimeType}, tx_ats::Vector{DateTime}; threaded::Bool = false,
+        valid_ats::Vector{<:TimeType}, tx_ats::Vector{<:TimeType}; threaded::Bool = false,
     ) where {K, V}
     n = length(keys)
     (length(valid_ats) == n && length(tx_ats) == n) ||
         throw(DimensionMismatch("keys, valid_ats, and tx_ats must have equal length"))
     valid_dts = _instant.(valid_ats)
+    tx_dts = _instant.(tx_ats)
     if !threaded
-        return _batch_grouped(s, keys, valid_dts, tx_ats)
+        return _batch_grouped(s, keys, valid_dts, tx_dts)
     elseif supports_parallel_reads(s)
-        return _batch_flat(s, keys, valid_dts, tx_ats)
+        return _batch_flat(s, keys, valid_dts, tx_dts)
     else
-        return _batch_prefetch(s, keys, valid_dts, tx_ats)
+        return _batch_prefetch(s, keys, valid_dts, tx_dts)
     end
 end
 

@@ -78,10 +78,11 @@ supports_parallel_reads(::ColumnarStore) = true
 # One pass over the columns, so `value` comes out contiguous.
 function snapshot(
         s::ColumnarStore{K, V};
-        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(UTC),
+        valid_at::Union{TimeType, Nothing} = nothing, tx_at::TimeType = now(UTC),
     ) where {K, V}
+    txd = _instant(tx_at)
     if valid_at === nothing
-        rows = findall(i -> s.tx_from[i] <= tx_at < s.tx_to[i], eachindex(s.key))
+        rows = findall(i -> s.tx_from[i] <= txd < s.tx_to[i], eachindex(s.key))
         return (
             entity = s.key[rows],
             value = s.value[rows],
@@ -93,7 +94,7 @@ function snapshot(
         ent = K[]
         val = V[]
         for key in keys(s.index)
-            v = _value_at(s, key, va, tx_at)
+            v = _value_at(s, key, va, txd)
             v === nothing || (push!(ent, key); push!(val, v))
         end
         return (entity = ent, value = val)
@@ -103,27 +104,28 @@ end
 # as_of/as_of_batch read the columns directly to skip building Records.
 function as_of(
         s::ColumnarStore{K, V}, key;
-        valid_at::TimeType = now(UTC), tx_at::DateTime = now(UTC),
+        valid_at::TimeType = now(UTC), tx_at::TimeType = now(UTC),
     ) where {K, V}
-    return _value_at(s, key, _instant(valid_at), tx_at)
+    return _value_at(s, key, _instant(valid_at), _instant(tx_at))
 end
 
 function as_of_batch(
         s::ColumnarStore{K, V}, keys::Vector{K},
-        valid_ats::Vector{<:TimeType}, tx_ats::Vector{DateTime}; threaded::Bool = false,
+        valid_ats::Vector{<:TimeType}, tx_ats::Vector{<:TimeType}; threaded::Bool = false,
     ) where {K, V}
     n = length(keys)
     (length(valid_ats) == n && length(tx_ats) == n) ||
         throw(DimensionMismatch("keys, valid_ats, and tx_ats must have equal length"))
     valid_dts = _instant.(valid_ats)
+    tx_dts = _instant.(tx_ats)
     result = Vector{Union{V, Nothing}}(undef, n)
     if threaded
         @threads for i in eachindex(keys)
-            result[i] = _value_at(s, keys[i], valid_dts[i], tx_ats[i])
+            result[i] = _value_at(s, keys[i], valid_dts[i], tx_dts[i])
         end
     else
         for i in eachindex(keys)
-            result[i] = _value_at(s, keys[i], valid_dts[i], tx_ats[i])
+            result[i] = _value_at(s, keys[i], valid_dts[i], tx_dts[i])
         end
     end
     return result

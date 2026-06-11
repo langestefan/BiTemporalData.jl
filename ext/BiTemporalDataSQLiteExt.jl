@@ -19,8 +19,10 @@ _dt(n) = DateTime(Dates.UTM(n))
 # --- constructors ---------------------------------------------------------
 
 function SQLiteStore{K, V}(db::DB; table::AbstractString = "records") where {K, V}
-    # `table` is developer-controlled, so interpolating it is safe; all data is
-    # bound as parameters.
+    # `table` is interpolated into SQL (no parameter binding for identifiers), so
+    # restrict it to a plain identifier; all data is bound as parameters.
+    occursin(r"^[A-Za-z_][A-Za-z0-9_]*$", table) ||
+        throw(ArgumentError("invalid table name $(repr(table)); must match ^[A-Za-z_][A-Za-z0-9_]*\$"))
     execute(
         db,
         """

@@ -16,11 +16,11 @@ Record a new fact over `[valid_from, valid_to)`. `valid_from`/`valid_to` accept 
 """
 function Base.insert!(
         s::BitemporalStore{K, V}, key, value;
-        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::DateTime = now(UTC),
+        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::TimeType = now(UTC),
     ) where {K, V}
-    vf, vt = _instant(valid_from), _instant(valid_to)
+    vf, vt, t = _instant(valid_from), _instant(valid_to), _instant(ts)
     _check_range(vf, vt)
-    return put_record!(s, key, Record{V}(nothing, value, vf, vt, ts, MAX_DT))
+    return put_record!(s, key, Record{V}(nothing, value, vf, vt, t, MAX_DT))
 end
 
 # Shared close path for `correct!`/`retract!`: close every believed record
@@ -65,13 +65,13 @@ readable via [`as_of`](@ref) at an earlier `tx_at`. Returns the stored corrected
 """
 function correct!(
         s::BitemporalStore{K, V}, key, value;
-        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::DateTime = now(UTC),
+        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::TimeType = now(UTC),
     ) where {K, V}
-    vf, vt = _instant(valid_from), _instant(valid_to)
+    vf, vt, t = _instant(valid_from), _instant(valid_to), _instant(ts)
     _check_range(vf, vt)
     return with_write_tx(s) do
-        _close_range!(s, key, vf, vt, ts)
-        put_record!(s, key, Record{V}(nothing, value, vf, vt, ts, MAX_DT))
+        _close_range!(s, key, vf, vt, t)
+        put_record!(s, key, Record{V}(nothing, value, vf, vt, t, MAX_DT))
     end
 end
 
@@ -87,12 +87,12 @@ sliver records (empty for a full retraction).
 """
 function retract!(
         s::BitemporalStore{K, V}, key;
-        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::DateTime = now(UTC),
+        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::TimeType = now(UTC),
     ) where {K, V}
-    vf, vt = _instant(valid_from), _instant(valid_to)
+    vf, vt, t = _instant(valid_from), _instant(valid_to), _instant(ts)
     _check_range(vf, vt)
     return with_write_tx(s) do
-        _close_range!(s, key, vf, vt, ts)
+        _close_range!(s, key, vf, vt, t)
     end
 end
 
@@ -130,28 +130,28 @@ newly inserted [`Record`](@ref)s.
 """
 function amend!(
         s::BitemporalStore{K, V}, key, value;
-        effective::TimeType, ts::DateTime = now(UTC),
+        effective::TimeType, ts::TimeType = now(UTC),
     ) where {K, V}
-    eff = _instant(effective)
+    eff, t = _instant(effective), _instant(ts)
     covering = filter(get_records(s, key)) do r
         _believed(r) && r.valid_from <= eff < r.valid_to
     end
     isempty(covering) &&
         throw(ArgumentError("no believed record covers effective date $eff"))
     for r in covering
-        ts >= r.tx_from || throw(
+        t >= r.tx_from || throw(
             ArgumentError(
-                "ts ($ts) predates the record's tx_from ($(r.tx_from)); transaction time is append-only",
+                "ts ($t) predates the record's tx_from ($(r.tx_from)); transaction time is append-only",
             ),
         )
     end
     return with_write_tx(s) do
         inserted = Record{V}[]
         for r in covering
-            close_tx!(s, r.id, ts)
+            close_tx!(s, r.id, t)
             r.valid_from < eff &&
-                push!(inserted, put_record!(s, key, Record{V}(nothing, r.value, r.valid_from, eff, ts, MAX_DT)))
-            push!(inserted, put_record!(s, key, Record{V}(nothing, value, eff, r.valid_to, ts, MAX_DT)))
+                push!(inserted, put_record!(s, key, Record{V}(nothing, r.value, r.valid_from, eff, t, MAX_DT)))
+            push!(inserted, put_record!(s, key, Record{V}(nothing, value, eff, r.valid_to, t, MAX_DT)))
         end
         inserted
     end
@@ -175,16 +175,16 @@ end
 """
     as_of(s, key; valid_at = now(UTC), tx_at = now(UTC)) -> Union{V,Nothing}
 
-The value believed at `tx_at` to hold at `valid_at`, or `nothing`. `valid_at`
-accepts any `TimeType` (a `Date` is taken as midnight). When more than one record
-is believed over `valid_at` at `tx_at`, the one with the latest `tx_from` wins,
-and a tie on `tx_from` resolves to the later write (append order).
+The value believed at `tx_at` to hold at `valid_at`, or `nothing`. Both `valid_at`
+and `tx_at` accept any `TimeType` (a `Date` is taken as midnight). When more than
+one record is believed over `valid_at` at `tx_at`, the one with the latest
+`tx_from` wins, and a tie on `tx_from` resolves to the later write (append order).
 """
 function as_of(
         s::BitemporalStore{K, V}, key;
-        valid_at::TimeType = now(UTC), tx_at::DateTime = now(UTC),
+        valid_at::TimeType = now(UTC), tx_at::TimeType = now(UTC),
     ) where {K, V}
-    return _pick(get_records(s, key), _instant(valid_at), tx_at)
+    return _pick(get_records(s, key), _instant(valid_at), _instant(tx_at))
 end
 
 """

@@ -38,7 +38,7 @@ load!(t::ThreadSafe, table; kw...) = lock(() -> load!(t.store, table; kw...), t.
 # not help (the lock already serializes), so force the serial path.
 function as_of_batch(
         t::ThreadSafe{K, V}, keys::Vector{K},
-        valid_ats::Vector{<:TimeType}, tx_ats::Vector{DateTime}; threaded::Bool = false,
+        valid_ats::Vector{<:TimeType}, tx_ats::Vector{<:TimeType}; threaded::Bool = false,
     ) where {K, V}
     return lock(() -> as_of_batch(t.store, keys, valid_ats, tx_ats; threaded = false), t.lock)
 end
