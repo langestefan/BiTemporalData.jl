@@ -62,7 +62,10 @@ DBInterface.close!(store.db)
 
 using Base.Threads
 
-safe = ThreadSafe(SQLiteStore{String, Float64}(dbfile))
+# Keep a handle to the inner store so we can close its connection at the end
+# without reaching into the ThreadSafe wrapper's internals.
+store = SQLiteStore{String, Float64}(dbfile)
+safe = ThreadSafe(store)
 
 # A fixed batch of point-in-time lookups (deterministic, so reruns compare).
 cities = ["Amsterdam", "Berlin", "London"]
@@ -91,5 +94,5 @@ println("  sequential: $(round(t_seq * 1000; digits = 1)) ms")
 println("  threaded:   $(round(t_par * 1000; digits = 1)) ms")
 println("  same result: $(sum_seq ≈ sum_par)  (single store-wide lock: safety, not a speedup)")
 
-DBInterface.close!(safe.store.db)
+DBInterface.close!(store.db)
 println("\nThe database file remains at $(dbfile) for inspection (e.g. `sqlite3`).")
