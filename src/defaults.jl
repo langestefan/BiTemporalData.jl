@@ -9,14 +9,14 @@ function _check_range(valid_from::DateTime, valid_to::DateTime)
 end
 
 """
-    insert!(s, key, value; valid_from, valid_to = MAX_DT, ts = now())
+    insert!(s, key, value; valid_from, valid_to = MAX_DT, ts = now(UTC))
 
 Record a new fact over `[valid_from, valid_to)`. `valid_from`/`valid_to` accept any
 `TimeType` (a `Date` is taken as midnight). Returns the stored [`Record`](@ref).
 """
 function Base.insert!(
         s::BitemporalStore{K, V}, key, value;
-        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::DateTime = now(),
+        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::DateTime = now(UTC),
     ) where {K, V}
     vf, vt = _instant(valid_from), _instant(valid_to)
     _check_range(vf, vt)
@@ -24,14 +24,14 @@ function Base.insert!(
 end
 
 """
-    correct!(s, key, value; valid_from, valid_to = MAX_DT, ts = now())
+    correct!(s, key, value; valid_from, valid_to = MAX_DT, ts = now(UTC))
 
 "We were wrong." Close every believed record overlapping the range, then append
 the corrected `value`. History stays readable via [`as_of`](@ref) at an earlier `tx_at`.
 """
 function correct!(
         s::BitemporalStore{K, V}, key, value;
-        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::DateTime = now(),
+        valid_from::TimeType, valid_to::TimeType = MAX_DT, ts::DateTime = now(UTC),
     ) where {K, V}
     vf, vt = _instant(valid_from), _instant(valid_to)
     _check_range(vf, vt)
@@ -68,7 +68,7 @@ function load!(s::BitemporalStore, table; key, value, valid_from, ts, valid_to =
 end
 
 """
-    amend!(s, key, value; effective, ts = now())
+    amend!(s, key, value; effective, ts = now(UTC))
 
 "The world changed on `effective`." Close the believed chapter(s) covering
 `effective`, re-append the old value over `[valid_from, effective)`, and append
@@ -76,7 +76,7 @@ end
 """
 function amend!(
         s::BitemporalStore{K, V}, key, value;
-        effective::TimeType, ts::DateTime = now(),
+        effective::TimeType, ts::DateTime = now(UTC),
     ) where {K, V}
     eff = _instant(effective)
     covering = filter(get_records(s, key)) do r
@@ -94,14 +94,14 @@ function amend!(
 end
 
 """
-    as_of(s, key; valid_at = now(), tx_at = now()) -> Union{V,Nothing}
+    as_of(s, key; valid_at = now(UTC), tx_at = now(UTC)) -> Union{V,Nothing}
 
 The value believed at `tx_at` to hold at `valid_at`, or `nothing`. `valid_at`
 accepts any `TimeType` (a `Date` is taken as midnight).
 """
 function as_of(
         s::BitemporalStore{K, V}, key;
-        valid_at::TimeType = now(), tx_at::DateTime = now(),
+        valid_at::TimeType = now(UTC), tx_at::DateTime = now(UTC),
     ) where {K, V}
     va = _instant(valid_at)
     hits = [

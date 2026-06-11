@@ -2,7 +2,7 @@
 # `BitemporalStore`; a backend may override any one with a faster native path.
 
 """
-    asof_join(a, b; valid_at = now(), tx_at = now()) -> NamedTuple of column vectors
+    asof_join(a, b; valid_at = now(UTC), tx_at = now(UTC)) -> NamedTuple of column vectors
 
 Inner-join two stores on `entity` at one `(valid_at, tx_at)` point. The stores
 must share the key type `K`. Columns `entity`, `a`, `b`, with one row per entity
@@ -11,7 +11,7 @@ dropped). Tables.jl-compatible.
 """
 function asof_join(
         a::BitemporalStore{K, Va}, b::BitemporalStore{K, Vb};
-        valid_at::TimeType = now(), tx_at::DateTime = now(),
+        valid_at::TimeType = now(UTC), tx_at::DateTime = now(UTC),
     ) where {K, Va, Vb}
     sa = snapshot(a; valid_at, tx_at)
     sb = snapshot(b; valid_at, tx_at)

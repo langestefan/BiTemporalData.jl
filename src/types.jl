@@ -8,6 +8,10 @@ Append-only bitemporal record: `value` over half-open `[valid_from, valid_to)`
 (valid time) and `[tx_from, tx_to)` (transaction time). Both axes are `DateTime`.
 Only `tx_to` may change (see [`close_tx!`](@ref)). `id` is backend-assigned by
 [`put_record!`](@ref).
+
+Transaction time is UTC by convention: the operations default `ts` to `now(UTC)`,
+so the "latest `tx_from` wins" rule and audit ordering never go backwards across a
+DST boundary. A caller passing an explicit `ts` is responsible for supplying UTC.
 """
 struct Record{V}
     id::Any

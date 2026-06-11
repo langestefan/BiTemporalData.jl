@@ -1,5 +1,5 @@
 """
-    snapshot(s; valid_at = nothing, tx_at = now()) -> NamedTuple of column vectors
+    snapshot(s; valid_at = nothing, tx_at = now(UTC)) -> NamedTuple of column vectors
 
 Columnar point-in-time view of the whole store, the read boundary for bulk
 workloads, since freezing `tx_at` is reproducible and leakage-proof. With
@@ -10,7 +10,7 @@ value there. Tables.jl-compatible.
 """
 function snapshot(
         s::BitemporalStore{K, V};
-        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(),
+        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(UTC),
     ) where {K, V}
     if valid_at === nothing
         rows = [

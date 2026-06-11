@@ -75,7 +75,7 @@ supports_parallel_reads(::ColumnarStore) = true
 # One pass over the columns, so `value` comes out contiguous.
 function snapshot(
         s::ColumnarStore{K, V};
-        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(),
+        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(UTC),
     ) where {K, V}
     if valid_at === nothing
         rows = findall(i -> s.tx_from[i] <= tx_at < s.tx_to[i], eachindex(s.key))
@@ -100,7 +100,7 @@ end
 # as_of/as_of_batch read the columns directly to skip building Records.
 function as_of(
         s::ColumnarStore{K, V}, key;
-        valid_at::TimeType = now(), tx_at::DateTime = now(),
+        valid_at::TimeType = now(UTC), tx_at::DateTime = now(UTC),
     ) where {K, V}
     return _value_at(s, key, _instant(valid_at), tx_at)
 end

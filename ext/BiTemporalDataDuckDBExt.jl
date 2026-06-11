@@ -5,7 +5,7 @@ module BiTemporalDataDuckDBExt
 using DuckDB: DuckDB, DB
 using DuckDB.DBInterface: execute
 using Serialization: serialize, deserialize
-using Dates: Dates, DateTime, TimeType, now
+using Dates: Dates, DateTime, TimeType, UTC, now
 using BiTemporalData: DuckDBStore, Record, MAX_DT, _instant
 import BiTemporalData: get_records, put_record!, close_tx!, entities, snapshot
 
@@ -105,7 +105,7 @@ end
 
 function snapshot(
         s::DuckDBStore{K, V};
-        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(),
+        valid_at::Union{TimeType, Nothing} = nothing, tx_at::DateTime = now(UTC),
     ) where {K, V}
     t = Dates.value(tx_at)
     if valid_at === nothing
