@@ -61,6 +61,36 @@ end
     SemanticSuite.run_semantic_suite(() -> ThreadSafe(SQLiteStore{String, Float64}(":memory:")))
 end
 
+@testitem "SQLiteStore native snapshot matches MemoryStore" tags = [:unit] begin
+    using BiTemporalData
+    using SQLite
+    using Dates
+
+    # Build the same bitemporal history in both backends, then compare the native
+    # SQLite `snapshot` against the reference `MemoryStore` one (both modes).
+    function build(make)
+        s = make()
+        insert!(s, "A", 1.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+        insert!(s, "B", 5.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 1))
+        correct!(s, "A", 2.0; valid_from = Date(2024, 1, 1), ts = DateTime(2024, 1, 3))
+        amend!(s, "A", 9.0; effective = Date(2024, 7, 1), ts = DateTime(2024, 1, 4))
+        return s
+    end
+    mem = build(() -> MemoryStore{String, Float64}())
+    sql = build(() -> SQLiteStore{String, Float64}(":memory:"))
+
+    # Compare as sets of rows, since entity ordering is backend-defined.
+    rowset(nt) = Set(Tuple(col[i] for col in values(nt)) for i in eachindex(first(nt)))
+
+    for txa in (DateTime(2024, 1, 2), DateTime(2024, 1, 5))
+        @test rowset(snapshot(sql; tx_at = txa)) == rowset(snapshot(mem; tx_at = txa))
+        for va in (Date(2024, 3, 1), Date(2024, 9, 1))
+            @test rowset(snapshot(sql; valid_at = va, tx_at = txa)) ==
+                rowset(snapshot(mem; valid_at = va, tx_at = txa))
+        end
+    end
+end
+
 @testitem "SQLiteStore rejects an invalid table name" tags = [:unit] begin
     using BiTemporalData
     using SQLite
