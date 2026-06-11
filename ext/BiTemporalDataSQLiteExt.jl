@@ -5,9 +5,9 @@ module BiTemporalDataSQLiteExt
 using SQLite: SQLite, DB
 using SQLite.DBInterface: execute, lastrowid
 using Serialization: serialize, deserialize
-using Dates: Dates, DateTime
-using BiTemporalData: SQLiteStore, Record, MAX_DT
-import BiTemporalData: get_records, put_record!, close_tx!, entities, with_write_tx
+using Dates: Dates, DateTime, TimeType, UTC, now
+using BiTemporalData: SQLiteStore, Record, MAX_DT, _instant
+import BiTemporalData: get_records, put_record!, close_tx!, entities, snapshot, with_write_tx
 
 # Generic (de)serialization of keys and values to/from SQLite BLOBs.
 _blob(x) = (io = IOBuffer(); serialize(io, x); take!(io))
@@ -103,5 +103,56 @@ end
 # rolls back and rethrows if `f` errors, so a failed correct!/amend!/retract!
 # leaves the file unchanged.
 with_write_tx(f, s::SQLiteStore) = SQLite.transaction(f, s.db)
+
+# --- native snapshot ------------------------------------------------------
+# Replace the generic N+1 walk (entities + one get_records per key) with one
+# window-function query, the same form as the DuckDB backend. Output column
+# shape matches the generic `snapshot`; row order is backend-defined.
+
+function snapshot(
+        s::SQLiteStore{K, V};
+        valid_at::Union{TimeType, Nothing} = nothing, tx_at::TimeType = now(UTC),
+    ) where {K, V}
+    t = Dates.value(_instant(tx_at))
+    if valid_at === nothing
+        ent = K[]
+        val = V[]
+        vf = DateTime[]
+        vt = DateTime[]
+        for row in execute(
+                s.db,
+                "SELECT key, value, valid_from, valid_to FROM $(s.table) " *
+                    "WHERE tx_from <= ? AND ? < tx_to ORDER BY key, id",
+                (t, t),
+            )
+            push!(ent, _unblob(row.key))
+            push!(val, _unblob(row.value))
+            push!(vf, _dt(row.valid_from))
+            push!(vt, _dt(row.valid_to))
+        end
+        return (entity = ent, value = val, valid_from = vf, valid_to = vt)
+    else
+        v = Dates.value(_instant(valid_at))
+        ent = K[]
+        val = V[]
+        # Per entity, the value with the latest tx_from among records that the
+        # belief at `tx_at` holds over `valid_at`: the SQL form of `as_of`.
+        # `id DESC` breaks tx_from ties by append order, matching _pick.
+        for row in execute(
+                s.db,
+                "SELECT key, value FROM (" *
+                    "SELECT key, value, " *
+                    "row_number() OVER (PARTITION BY key ORDER BY tx_from DESC, id DESC) AS rn " *
+                    "FROM $(s.table) " *
+                    "WHERE tx_from <= ? AND ? < tx_to AND valid_from <= ? AND ? < valid_to" *
+                    ") WHERE rn = 1 ORDER BY key",
+                (t, t, v, v),
+            )
+            push!(ent, _unblob(row.key))
+            push!(val, _unblob(row.value))
+        end
+        return (entity = ent, value = val)
+    end
+end
 
 end # module
