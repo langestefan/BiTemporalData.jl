@@ -14,6 +14,7 @@ TestItems = "1c621080-faea-4a02-84b6-bbd5e436b8fe"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 
 [compat]
+Aqua = "0.8.16"
 # LoweredCodeUtils 3.6 changed an internal signature (add_active_gotos!) that the
 # pinned JET calls, breaking JET precompilation on newer Julia. Cap it below 3.6
 # until JET supports it. It is a transitive (JET) dep, listed here only to pin it.
