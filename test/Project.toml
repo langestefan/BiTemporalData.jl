@@ -18,6 +18,7 @@ TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 # pinned JET calls, breaking JET precompilation on newer Julia. Cap it below 3.6
 # until JET supports it. It is a transitive (JET) dep, listed here only to pin it.
 LoweredCodeUtils = "< 3.6"
+TestItemRunner = "1.1.5"
 
 [sources]
 BiTemporalData = {path = ".."}
